@@ -7,7 +7,8 @@ const AccountSection = ({ setError, setSuccess, handleSubmit }) => {
   const [expanded, setExpanded] = useState(false);
   const [accountData, setAccountData] = useState({
     Username: '',
-    Password: '',
+    // Password: '********',
+    CurrentPassword: '',
     ResetPassword: '',
     ConfirmPassword: '',
   });
@@ -27,11 +28,11 @@ const AccountSection = ({ setError, setSuccess, handleSubmit }) => {
             Authorization: `Bearer ${token}`,
           },
         });
-        const { username } = response.data;
+        const { email } = response.data;
         setAccountData((prev) => ({
           ...prev,
-          Username: username || '',
-          Password: '********',
+          Username: email || '',
+          // Password: '********',
         }));
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -53,61 +54,61 @@ const AccountSection = ({ setError, setSuccess, handleSubmit }) => {
     setSuccess('');
   };
 
-  const handleSectionSubmit = async (e) => {
+  const handlePasswordUpdate = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    if (accountData.ResetPassword || accountData.ConfirmPassword) {
-      if (accountData.ResetPassword !== accountData.ConfirmPassword) {
-        setError('Reset Password and Confirm Password do not match');
-        return;
-      }
-
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setError('No authentication token found. Please log in.');
-          navigate('/'); // Redirect to login page
-          return;
-        }
-
-        await axios.post(
-          `${process.env.REACT_APP_API_URL}/reset-password`,
-          {
-            resetToken: token,
-            newPassword: accountData.ResetPassword,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        setSuccess('Password reset successfully');
-        setAccountData((prev) => ({
-          ...prev,
-          ResetPassword: '',
-          ConfirmPassword: '',
-          Password: '********',
-        }));
-      } catch (error) {
-        console.error('Error resetting password:', error);
-        if (error.code === 'ERR_NETWORK') {
-          setError('Cannot connect to the server. Please check if the backend is running.');
-        } else {
-          setError(error.response?.data?.message || 'Failed to reset password');
-        }
-        return;
-      }
+    if (accountData.ResetPassword !== accountData.ConfirmPassword) {
+      setError('Reset Password and Confirm Password do not match');
+      return;
     }
 
-    console.log({ accountData });
-    handleSubmit(e);
+    if (!accountData.CurrentPassword || !accountData.ResetPassword) {
+      setError('Current and new passwords are required');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('No authentication token found. Please log in.');
+        navigate('/'); // Redirect to login page
+        return;
+      }
+
+      await axios.put(
+        `${process.env.REACT_APP_API_URL}/user/update-password`,
+        {
+          currentPassword: accountData.CurrentPassword,
+          newPassword: accountData.ResetPassword,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setSuccess('Password updated successfully');
+      setAccountData((prev) => ({
+        ...prev,
+        CurrentPassword: '',
+        ResetPassword: '',
+        ConfirmPassword: '',
+        // Password: '********',
+      }));
+    } catch (error) {
+      console.error('Error updating password:', error);
+      if (error.code === 'ERR_NETWORK') {
+        setError('Cannot connect to the server. Please check if the backend is running.');
+      } else {
+        setError(error.response?.data?.message || 'Failed to update password');
+      }
+    }
   };
 
   return (
-    <form className="section account-section" onSubmit={handleSectionSubmit}>
+    <form className="section account-section" onSubmit={handleSubmit}>
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Account Information
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
@@ -133,6 +134,13 @@ const AccountSection = ({ setError, setSuccess, handleSubmit }) => {
             </div>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={handlePasswordUpdate}
+          className="mt-4 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+        >
+          Update Password
+        </button>
       </div>
     </form>
   );

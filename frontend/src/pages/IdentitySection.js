@@ -15,6 +15,7 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
   ]);
   const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [showAddedDocuments, setShowAddedDocuments] = useState(false);
+  const [addedDocuments, setAddedDocuments] = useState([]);
 
   const documentOptions = [
     'Select Document',
@@ -46,10 +47,8 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
           DateOfBirth: '',
           PlaceOfBirth: '',
         });
-        setIdentityData(identityData.length ? identityData : [
-          { id: 1, documentType: 'Select Document', documentNumber: '', file: null },
-        ]);
-        setShowAddedDocuments(identityData.some(item => item.documentType !== 'Select Document' || item.documentNumber || item.fileUrl));
+        setAddedDocuments(identityData.filter(item => item.documentType !== 'Select Document' && item.documentNumber && item.fileUrl) || []);
+        setShowAddedDocuments(identityData.some(item => item.documentType !== 'Select Document' && item.documentNumber && item.fileUrl));
       } catch (error) {
         setError(error.response?.data?.message || 'Failed to fetch identity data');
       }
@@ -100,30 +99,70 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     );
   };
 
-  const addIdentityRow = () => {
+  const addIdentityRow = async () => {
     const lastRow = identityData[identityData.length - 1];
-    if (lastRow.documentType !== 'Select Document' || lastRow.documentNumber || lastRow.file) {
-      setShowAddedDocuments(true);
+    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.file) {
+      setError('Please select a document type, enter a document number, and upload a file before adding.');
+      return;
     }
-    setIdentityData((prev) => [
-      ...prev,
-      { id: prev.length + 1, documentType: 'Select Document', documentNumber: '', file: null },
-    ]);
-    setValidationErrors((prev) => [
-      ...prev,
-      { id: prev.length + 1, error: '' },
-    ]);
+
+    const error = validateInput(lastRow.documentType, lastRow.documentNumber);
+    if (error) {
+      setValidationErrors((prev) =>
+        prev.map((err) => (err.id === lastRow.id ? { ...err, error } : err))
+      );
+      setError(error);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('personalData', JSON.stringify(personalData));
+      formData.append('identityData[0]', JSON.stringify({
+        documentType: lastRow.documentType,
+        documentNumber: lastRow.documentNumber,
+      }));
+      formData.append('file_0', lastRow.file);
+
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setAddedDocuments((prev) => [
+        ...prev,
+        {
+          id: lastRow.id,
+          documentType: lastRow.documentType,
+          documentNumber: lastRow.documentNumber,
+          fileUrl: response.data.identity.identityData[response.data.identity.identityData.length - 1].fileUrl,
+        },
+      ]);
+      setShowAddedDocuments(true);
+      setIdentityData([{ id: identityData.length + 1, documentType: 'Select Document', documentNumber: '', file: null }]);
+      setValidationErrors([{ id: identityData.length + 1, error: '' }]);
+      setSuccess('Document added successfully');
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to save document');
+    }
   };
 
-  const deleteIdentityRow = (id) => {
-    setIdentityData((prev) => prev.filter((item) => item.id !== id));
-    setValidationErrors((prev) => prev.filter((err) => err.id !== id));
-    if (
-      identityData.filter(
-        (item) => item.documentType !== 'Select Document' || item.documentNumber || item.file
-      ).length <= 1
-    ) {
-      setShowAddedDocuments(false);
+  const deleteIdentityRow = (id) => async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(`${process.env.REACT_APP_API_URL}/identity/document/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
+      if (addedDocuments.length <= 1) {
+        setShowAddedDocuments(false);
+      }
+      setSuccess('Document deleted successfully');
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to delete document');
     }
   };
 
@@ -139,43 +178,21 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     setError('');
     setSuccess('');
 
-    const hasErrors = validationErrors.some((err) => err.error);
-    if (hasErrors) {
-      setError('Please correct the validation errors before submitting');
-      return;
-    }
-
-    const selectedTypes = identityData.map((item) => item.documentType);
-    const uniqueTypes = new Set(selectedTypes.filter((type) => type !== 'Select Document'));
-    if (uniqueTypes.size < selectedTypes.filter((type) => type !== 'Select Document').length) {
-      setError('Each document type can only be selected once');
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
       const formData = new FormData();
       formData.append('personalData', JSON.stringify(personalData));
-      identityData.forEach((item, index) => {
-        formData.append(`identityData[${index}]`, JSON.stringify({
-          documentType: item.documentType,
-          documentNumber: item.documentNumber,
-        }));
-        if (item.file) {
-          formData.append(`file_${index}`, item.file);
-        }
-      });
 
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity`, formData, {
+      await axios.post(`${process.env.REACT_APP_API_URL}/identity`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
         },
       });
-      setSuccess('Identity data saved successfully');
+      setSuccess('Personal data saved successfully');
       handleSubmit(e);
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to save identity data');
+      setError(error.response?.data?.message || 'Failed to save personal data');
     }
   };
 
@@ -263,21 +280,12 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
                     {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
                   </td>
                   <td className="border p-2">
-                    {index === identityData.length - 1 ? (
-                      <button
-                        onClick={addIdentityRow}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => deleteIdentityRow(item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
+                    <button
+                      onClick={addIdentityRow}
+                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
+                    >
+                      Add
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -287,7 +295,7 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
         {showAddedDocuments && (
           <div className="table-container mt-6">
             <h4>Added Documents</h4>
-            {identityData.filter((item) => item.documentType !== 'Select Document' || item.documentNumber || item.file).length === 0 ? (
+            {addedDocuments.length === 0 ? (
               <p className="text-gray-500">No documents added yet.</p>
             ) : (
               <table className="w-full border-collapse">
@@ -300,23 +308,29 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {identityData
-                    .filter((item) => item.documentType !== 'Select Document' || item.documentNumber || item.file)
-                    .map((item) => (
-                      <tr key={item.id} className="table-row">
-                        <td className="border p-2">{item.documentType !== 'Select Document' ? item.documentType : 'N/A'}</td>
-                        <td className="border p-2">{item.documentNumber || 'N/A'}</td>
-                        <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
-                        <td className="border p-2">
-                          <button
-                            onClick={() => deleteIdentityRow(item.id)}
-                            className="text-red-500"
-                          >
-                            Cancel
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                  {addedDocuments.map((item) => (
+                    <tr key={item.id} className="table-row">
+                      <td className="border p-2">{item.documentType}</td>
+                      <td className="border p-2">{item.documentNumber}</td>
+                      <td className="border p-2">
+                        {item.fileUrl ? (
+                          <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                            View File
+                          </a>
+                        ) : (
+                          'No file uploaded'
+                        )}
+                      </td>
+                      <td className="border p-2">
+                        <button
+                          onClick={deleteIdentityRow(item.id)}
+                          className="text-red-500"
+                        >
+                          <FaTimes />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
