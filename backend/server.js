@@ -42,6 +42,12 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(multerErrorHandler);
 
+// Log all incoming requests for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Verify Environment Variables
 if (!process.env.MONGO_URI) {
   console.error('Error: MONGO_URI is not defined in .env file');
@@ -56,30 +62,50 @@ if (!process.env.UPLOADCARE_PUBLIC_KEY) {
   process.exit(1);
 }
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB and start server only after successful connection
+async function startServer() {
+  try {
+    await connectDB();
+    console.log('MongoDB connected successfully');
 
-// Routes
-app.get('/', (req, res) => {
-  res.status(200).json({ message: '✅ Backend is running' });
-});
-app.use('/', authRoutes);
-app.use('/identity', upload.any(), identityRoutes);
-app.use('/property', upload.any(), propertyRoutes);
-app.use('/financial', upload.any(), financialRoutes);
+    // Routes
+    app.get('/', (req, res) => {
+      res.status(200).json({ message: '✅ Backend is running' });
+    });
+    app.use('/', authRoutes);
+    app.use('/identity', identityRoutes);
+    app.use('/property', upload.any(), propertyRoutes);
+    app.use('/financial', upload.any(), financialRoutes);
 
-// Serve uploaded files
-app.use('/Uploads', express.static('Uploads'));
+    // Serve uploaded files
+    app.use('/Uploads', express.static('Uploads'));
 
-// Handle 404 errors
-app.use((req, res, next) => {
-  res.status(404).json({ message: `Route ${req.originalUrl} not found` });
-});
+    // Handle 404 errors
+    app.use((req, res, next) => {
+      console.error(`404 Error: Route ${req.originalUrl} not found`);
+      res.status(404).json({ message: `Route ${req.originalUrl} not found` });
+    });
 
-// Global error handler
-app.use(errorHandler);
+    // Global error handler with detailed logging
+    app.use((err, req, res, next) => {
+      console.error('Global Error:', {
+        message: err.message,
+        stack: err.stack,
+        url: req.originalUrl,
+        method: req.method,
+        body: req.body,
+      });
+      errorHandler(err, req, res, next);
+    });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
-});
+    // Start Server
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

@@ -10,6 +10,7 @@ const identitySchema = new mongoose.Schema({
   },
   identityData: [
     {
+      _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
       documentType: { type: String, trim: true },
       documentNumber: { type: String, trim: true },
       fileUrl: { type: String },

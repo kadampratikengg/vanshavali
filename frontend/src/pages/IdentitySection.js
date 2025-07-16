@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
@@ -11,11 +11,13 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     PlaceOfBirth: '',
   });
   const [identityData, setIdentityData] = useState([
-    { id: 1, documentType: 'Select Document', documentNumber: '', file: null },
+    { id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null },
   ]);
   const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [showAddedDocuments, setShowAddedDocuments] = useState(false);
   const [addedDocuments, setAddedDocuments] = useState([]);
+  const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
+  const widgetRefs = useRef({});
 
   const documentOptions = [
     'Select Document',
@@ -34,9 +36,74 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
   ];
 
   useEffect(() => {
+    console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
+    console.log('API URL:', process.env.REACT_APP_API_URL);
+  }, []);
+
+  useEffect(() => {
+    const loadUploadcare = async () => {
+      try {
+        console.log('Attempting to load Uploadcare script...');
+        if (!window.uploadcare) {
+          await import('https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js');
+          window.UPLOADCARE_PUBLIC_KEY = process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY;
+          console.log('Uploadcare script loaded successfully');
+        }
+        setUploadcareLoaded(true);
+      } catch (error) {
+        setError('Failed to load Uploadcare widget');
+        console.error('Uploadcare load error:', error);
+      }
+    };
+    loadUploadcare();
+  }, [setError]);
+
+  useEffect(() => {
+    if (!uploadcareLoaded || !window.uploadcare) {
+      console.log('Uploadcare not loaded or window.uploadcare not available');
+      return;
+    }
+
+    identityData.forEach((item) => {
+      if (!widgetRefs.current[item.id]) {
+        try {
+          console.log(`Initializing Uploadcare widget for ID: ${item.id}`);
+          const widget = window.uploadcare.Widget(`[data-uploadcare-id="${item.id}"]`);
+          widget.onUploadComplete((file) => {
+            console.log(`File uploaded for ID ${item.id}:`, file);
+            setIdentityData((prev) =>
+              prev.map((row) => (row.id === item.id ? { ...row, file, fileUuid: file.uuid } : row))
+            );
+          });
+          widgetRefs.current[item.id] = widget;
+          console.log(`Uploadcare widget initialized for ID: ${item.id}`);
+        } catch (error) {
+          setError('Failed to initialize Uploadcare widget');
+          console.error('Uploadcare widget error for ID:', item.id, error);
+        }
+      }
+    });
+
+    return () => {
+      Object.values(widgetRefs.current).forEach((widget) => {
+        try {
+          console.log('Cleaning up Uploadcare widget');
+        } catch (error) {
+          console.error('Error cleaning up Uploadcare widget:', error);
+        }
+      });
+      widgetRefs.current = {};
+    };
+  }, [uploadcareLoaded, identityData, setError]);
+
+  useEffect(() => {
     const fetchIdentityData = async () => {
       try {
         const token = localStorage.getItem('token');
+        if (!token) {
+          setError('No authentication token found');
+          return;
+        }
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/identity`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -47,10 +114,27 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
           DateOfBirth: '',
           PlaceOfBirth: '',
         });
-        setAddedDocuments(identityData.filter(item => item.documentType !== 'Select Document' && item.documentNumber && item.fileUrl) || []);
-        setShowAddedDocuments(identityData.some(item => item.documentType !== 'Select Document' && item.documentNumber && item.fileUrl));
+        setAddedDocuments(identityData.map(item => ({
+          id: item._id,
+          documentType: item.documentType,
+          documentNumber: item.documentNumber,
+          fileUrl: item.fileUrl,
+        })) || []);
+        setShowAddedDocuments(identityData.length > 0);
       } catch (error) {
-        setError(error.response?.data?.message || 'Failed to fetch identity data');
+        if (error.response?.status === 404) {
+          console.warn('Identity endpoint not found, using default data');
+          setPersonalData({
+            LegalName: '',
+            AlternateName: '',
+            DateOfBirth: '',
+            PlaceOfBirth: '',
+          });
+          setAddedDocuments([]);
+          setShowAddedDocuments(false);
+        } else {
+          setError(error.response?.data?.message || 'Failed to fetch identity data');
+        }
       }
     };
     fetchIdentityData();
@@ -92,16 +176,9 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     setSuccess('');
   };
 
-  const handleIdentityFileChange = (id) => (e) => {
-    const file = e.target.files[0];
-    setIdentityData((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, file } : item))
-    );
-  };
-
   const addIdentityRow = async () => {
     const lastRow = identityData[identityData.length - 1];
-    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.file) {
+    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.fileUuid) {
       setError('Please select a document type, enter a document number, and upload a file before adding.');
       return;
     }
@@ -117,43 +194,42 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('personalData', JSON.stringify(personalData));
-      formData.append('identityData[0]', JSON.stringify({
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity/document`, {
         documentType: lastRow.documentType,
         documentNumber: lastRow.documentNumber,
-      }));
-      formData.append('file_0', lastRow.file);
-
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity`, formData, {
+        fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
+      }, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
         },
       });
+
+      const newDocument = response.data.document;
 
       setAddedDocuments((prev) => [
         ...prev,
         {
-          id: lastRow.id,
-          documentType: lastRow.documentType,
-          documentNumber: lastRow.documentNumber,
-          fileUrl: response.data.identity.identityData[response.data.identity.identityData.length - 1].fileUrl,
+          id: newDocument._id,
+          documentType: newDocument.documentType,
+          documentNumber: newDocument.documentNumber,
+          fileUrl: newDocument.fileUrl,
         },
       ]);
       setShowAddedDocuments(true);
-      setIdentityData([{ id: identityData.length + 1, documentType: 'Select Document', documentNumber: '', file: null }]);
+      setIdentityData([{ id: identityData.length + 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }]);
       setValidationErrors([{ id: identityData.length + 1, error: '' }]);
       setSuccess('Document added successfully');
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to save document');
+      console.error('Add document error:', error);
     }
   };
 
   const deleteIdentityRow = (id) => async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.delete(`${process.env.REACT_APP_API_URL}/identity/document/${id}`, {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/identity/document/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
@@ -163,6 +239,7 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
       setSuccess('Document deleted successfully');
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to delete document');
+      console.error('Delete document error:', error);
     }
   };
 
@@ -173,6 +250,47 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     setSuccess('');
   };
 
+  const handleUpdateIdentity = async () => {
+    setError('');
+    setSuccess('');
+
+    const hasErrors = validationErrors.some((err) => err.error);
+    if (hasErrors) {
+      setError('Please correct the validation errors before updating');
+      return;
+    }
+
+    const selectedTypes = addedDocuments.map((item) => item.documentType);
+    const uniqueTypes = new Set(selectedTypes);
+    if (uniqueTypes.size < selectedTypes.length) {
+      setError('Each document type can only be selected once');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`${process.env.REACT_APP_API_URL}/identity`, {
+        identityData: addedDocuments,
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setSuccess('Documents updated successfully');
+      setAddedDocuments(response.data.identity.identityData.map(item => ({
+        id: item._id,
+        documentType: item.documentType,
+        documentNumber: item.documentNumber,
+        fileUrl: item.fileUrl,
+      })));
+      setShowAddedDocuments(response.data.identity.identityData.length > 0);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to update identity data');
+      console.error('Update identity error:', error);
+    }
+  };
+
   const handleSectionSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -180,19 +298,20 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('personalData', JSON.stringify(personalData));
-
-      await axios.post(`${process.env.REACT_APP_API_URL}/identity`, formData, {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity`, {
+        personalData,
+      }, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
         },
       });
       setSuccess('Personal data saved successfully');
+      setPersonalData(response.data.identity.personalData);
       handleSubmit(e);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to save personal data');
+      console.error('Update personal data error:', error);
     }
   };
 
@@ -271,13 +390,22 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
                     )}
                   </td>
                   <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleIdentityFileChange(item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                    {uploadcareLoaded ? (
+                      <div>
+                        <input
+                          type="hidden"
+                          data-uploadcare-id={item.id}
+                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
+                          data-images-only="false"
+                          data-max-size="104857600"
+                          data-file-types=".pdf,.jpg,.png"
+                          className="w-full"
+                        />
+                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">Loading uploader...</p>
+                    )}
                   </td>
                   <td className="border p-2">
                     <button
@@ -334,8 +462,20 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
                 </tbody>
               </table>
             )}
+            {/* <button
+              onClick={handleUpdateIdentity}
+              className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            >
+              Update Documents
+            </button> */}
           </div>
         )}
+        <button
+          type="submit"
+          className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Update Personal Details
+        </button>
       </div>
     </form>
   );
