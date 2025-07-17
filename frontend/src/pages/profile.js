@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './dashboard.css';
 import {
   FaChevronLeft,
@@ -10,6 +10,7 @@ import {
   FaBars,
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import toast, { Toaster } from 'react-hot-toast';
 import AccountSection from './AccountSection';
 import IdentitySection from './IdentitySection';
 import FinancialSection from './FinancialSection';
@@ -25,6 +26,26 @@ const Profile = ({ setIsAuthenticated, name }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
+
+  // Effect to handle toast notifications
+  useEffect(() => {
+    if (error) {
+      toast.error(error, {
+        style: {
+          background: '#fee2e2',
+          color: '#b91c1c',
+        },
+      });
+    }
+    if (success) {
+      toast.success(success, {
+        style: {
+          background: '#dcfce7',
+          color: '#15803d',
+        },
+      });
+    }
+  }, [error, success]);
 
   const toggleSidebar = () => {
     setIsSidebarMinimized((prevState) => !prevState);
@@ -55,6 +76,7 @@ const Profile = ({ setIsAuthenticated, name }) => {
 
   return (
     <div className="dashboard">
+      <Toaster position="top-right" reverseOrder={false} />
       <div className={`sidebar ${isSidebarMinimized ? 'minimized' : 'open'}`}>
         <button className="minimize-btn" onClick={toggleSidebar}>
           {isSidebarMinimized ? <FaChevronRight /> : <FaChevronLeft />}
@@ -93,9 +115,6 @@ const Profile = ({ setIsAuthenticated, name }) => {
         </button>
         <div className="main-content">
           <h2>User Profile</h2>
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          {success && <p className="text-green-500 text-sm mb-2">{success}</p>}
-
           <AccountSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
           <IdentitySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
           <FinancialSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
@@ -105,16 +124,6 @@ const Profile = ({ setIsAuthenticated, name }) => {
           <DigitalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
           <LegacySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
           <FamilySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-
-          <div className="submit-section">
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              className="submit-section"
-            >
-              Submit All
-            </button>
-          </div>
         </div>
       </div>
     </div>
