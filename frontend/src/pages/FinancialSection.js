@@ -1,25 +1,165 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
+import axios from 'axios';
 
-const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
+const FinancialSection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
   const [financialData, setFinancialData] = useState({
-    BankDetails: [{ id: 1, bankName: '', accountNumber: '', ifsc: '', file: null }],
-    FixedDeposits: [{ id: 1, bankName: '', fdAccountNumber: '', ifsc: '', file: null }],
-    MutualFunds: [{ id: 1, schemeName: '', fundManager: '', typeOfScheme: '', file: null }],
-    PfDetails: '',
-    InsurancePolicies: [{ id: 1, policyName: '', policyNumber: '', file: null }],
-    BusinessOwnership: [{ id: 1, businessName: '', investment: '', file: null }],
-    CryptoAccounts: [{ id: 1, vendor: '', accountName: '', file: null }],
+    Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null }],
+    Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', file: null, fileUuid: null }],
   });
   const [showAddedDocuments, setShowAddedDocuments] = useState({
-    bankDetails: false,
-    fixedDeposits: false,
-    mutualFunds: false,
-    insurancePolicies: false,
-    businessOwnership: false,
-    cryptoAccounts: false,
+    banking: false,
+    investments: false,
   });
+  const [addedDocuments, setAddedDocuments] = useState({
+    Banking: [],
+    Investments: [],
+  });
+  const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
+  const widgetRefs = useRef({});
+
+  const bankingOptions = [
+    'Select Type',
+    'Bank Account',
+    'Fixed Deposit',
+    'Recurring Deposit',
+    'Other Bank Related',
+  ];
+
+  const investmentOptions = [
+    'Select Type',
+    'Mutual Fund',
+    'Business Ownership',
+    'Crypto Account',
+    'Demat Account',
+    'PF Account',
+  ];
+
+  useEffect(() => {
+    console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
+    console.log('API URL:', process.env.REACT_APP_API_URL);
+  }, []);
+
+  useEffect(() => {
+    const loadUploadcare = async () => {
+      try {
+        console.log('Attempting to load Uploadcare script...');
+        if (!window.uploadcare) {
+          await import('https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js');
+          window.UPLOADCARE_PUBLIC_KEY = process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY;
+          console.log('Uploadcare script loaded successfully');
+        }
+        setUploadcareLoaded(true);
+      } catch (error) {
+        setError('Failed to load Uploadcare widget');
+        console.error('Uploadcare load error:', error);
+      }
+    };
+    loadUploadcare();
+  }, [setError]);
+
+  useEffect(() => {
+    if (!uploadcareLoaded || !window.uploadcare) {
+      console.log('Uploadcare not loaded or window.uploadcare not available');
+      return;
+    }
+
+    Object.keys(financialData).forEach((section) => {
+      financialData[section].forEach((item) => {
+        if (!widgetRefs.current[`${section}_${item.id}`]) {
+          try {
+            console.log(`Initializing Uploadcare widget for ${section} ID: ${item.id}`);
+            const widget = window.uploadcare.Widget(`[data-uploadcare-id="${section}_${item.id}"]`);
+            widget.onUploadComplete((file) => {
+              console.log(`File uploaded for ${section} ID ${item.id}:`, file);
+              setFinancialData((prev) => ({
+                ...prev,
+                [section]: prev[section].map((row) =>
+                  row.id === item.id ? { ...row, file, fileUuid: file.uuid } : row
+                ),
+              }));
+            });
+            widgetRefs.current[`${section}_${item.id}`] = widget;
+            console.log(`Uploadcare widget initialized for ${section} ID: ${item.id}`);
+          } catch (error) {
+            setError('Failed to initialize Uploadcare widget');
+            console.error(`Uploadcare widget error for ${section} ID:`, item.id, error);
+          }
+        }
+      });
+    });
+
+    return () => {
+      Object.values(widgetRefs.current).forEach((widget) => {
+        try {
+          console.log('Cleaning up Uploadcare widget');
+        } catch (error) {
+          console.error('Error cleaning up Uploadcare widget:', error);
+        }
+      });
+      widgetRefs.current = {};
+    };
+  }, [uploadcareLoaded, financialData, setError]);
+
+  useEffect(() => {
+    const fetchFinancialData = async () => {
+      try {
+        if (!token) {
+          setError('No authentication token found');
+          return;
+        }
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/financial`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const { financialData: fetchedData } = response.data;
+        setFinancialData(fetchedData || {
+          Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null }],
+          Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', file: null, fileUuid: null }],
+        });
+        setAddedDocuments({
+          Banking: fetchedData?.Banking?.map(item => ({
+            id: item._id,
+            type: item.type,
+            bankName: item.bankName,
+            accountNumber: item.accountNumber,
+            ifsc: item.ifsc,
+            fileUrl: item.fileUrl,
+          })) || [],
+          Investments: fetchedData?.Investments?.map(item => ({
+            id: item._id,
+            type: item.type,
+            name: item.name,
+            detail: item.detail,
+            fileUrl: item.fileUrl,
+          })) || [],
+        });
+        setShowAddedDocuments({
+          banking: fetchedData?.Banking?.length > 0,
+          investments: fetchedData?.Investments?.length > 0,
+        });
+      } catch (error) {
+        if (error.response?.status === 404) {
+          console.warn('Financial endpoint not found, using default data');
+          setFinancialData({
+            Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null }],
+            Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', file: null, fileUuid: null }],
+          });
+          setAddedDocuments({
+            Banking: [],
+            Investments: [],
+          });
+          setShowAddedDocuments({
+            banking: false,
+            investments: false,
+          });
+        } else {
+          setError(error.response?.data?.message || 'Failed to fetch financial data');
+        }
+      }
+    };
+    fetchFinancialData();
+  }, [setError, token]);
 
   const handleFinancialTableChange = (section, id, field, value) => {
     setFinancialData((prev) => ({
@@ -28,83 +168,157 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
         item.id === id ? { ...item, [field]: value } : item
       ),
     }));
-  };
-
-  const handleFinancialFileChange = (section, id) => (e) => {
-    const file = e.target.files[0];
-    setFinancialData((prev) => ({
-      ...prev,
-      [section]: prev[section].map((item) =>
-        item.id === id ? { ...item, file } : item
-      ),
-    }));
-  };
-
-  const addFinancialRow = (section) => {
-    const lastRow = financialData[section][financialData[section].length - 1];
-    const hasData = Object.values(lastRow).some((val, idx) => idx !== 0 && val);
-    if (hasData) {
-      setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: true }));
-    }
-    setFinancialData((prev) => {
-      const newRow = {
-        id: prev[section].length + 1,
-        ...(section === 'BankDetails' ? { bankName: '', accountNumber: '', ifsc: '', file: null } :
-          section === 'FixedDeposits' ? { bankName: '', fdAccountNumber: '', ifsc: '', file: null } :
-          section === 'MutualFunds' ? { schemeName: '', fundManager: '', typeOfScheme: '', file: null } :
-          section === 'InsurancePolicies' ? { policyName: '', policyNumber: '', file: null } :
-          section === 'BusinessOwnership' ? { businessName: '', investment: '', file: null } :
-          section === 'CryptoAccounts' ? { vendor: '', accountName: '', file: null } : {})
-      };
-      return {
-        ...prev,
-        [section]: [...prev[section], newRow],
-      };
-    });
-  };
-
-  const deleteFinancialRow = (section, id) => {
-    setFinancialData((prev) => ({
-      ...prev,
-      [section]: prev[section].filter((item) => item.id !== id),
-    }));
-    if (
-      financialData[section].filter((item) =>
-        Object.values(item).some((val, idx) => idx !== 0 && val)
-      ).length <= 1
-    ) {
-      setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: false }));
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFinancialData((prev) => ({ ...prev, [name]: value }));
     setError('');
     setSuccess('');
   };
 
-  const handleSectionSubmit = (e) => {
+  const addFinancialRow = (section) => async (e) => {
+    e.preventDefault();
+    const lastRow = financialData[section][financialData[section].length - 1];
+    if (lastRow.type === 'Select Type' || (!lastRow.bankName && !lastRow.accountNumber && !lastRow.ifsc && !lastRow.name && !lastRow.detail) || !lastRow.fileUuid) {
+      setError(`Please select a type, fill at least one field, and upload a file for ${section} before adding.`);
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/financial/document`,
+        {
+          type: lastRow.type,
+          ...(section === 'Banking' ? {
+            bankName: lastRow.bankName,
+            accountNumber: lastRow.accountNumber,
+            ifsc: lastRow.ifsc,
+          } : {
+            name: lastRow.name,
+            detail: lastRow.detail,
+          }),
+          fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const newDocument = response.data.document;
+      setAddedDocuments((prev) => ({
+        ...prev,
+        [section]: [
+          ...prev[section],
+          {
+            id: newDocument._id,
+            type: lastRow.type,
+            ...(section === 'Banking' ? {
+              bankName: lastRow.bankName,
+              accountNumber: lastRow.accountNumber,
+              ifsc: lastRow.ifsc,
+            } : {
+              name: lastRow.name,
+              detail: lastRow.detail,
+            }),
+            fileUrl: newDocument.fileUrl,
+          },
+        ],
+      }));
+      setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: true }));
+      setFinancialData((prev) => ({
+        ...prev,
+        [section]: [
+          {
+            id: prev[section].length + 1,
+            type: 'Select Type',
+            ...(section === 'Banking' ? { bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null } :
+              section === 'Investments' ? { name: '', detail: '', file: null, fileUuid: null } : {})
+          },
+        ],
+      }));
+      setSuccess(`${section} document added successfully`);
+    } catch (error) {
+      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()} document`);
+      console.error(`Add ${section} document error:`, error);
+    }
+  };
+
+  const deleteFinancialRow = (section, id) => async () => {
+    try {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/financial/document/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAddedDocuments((prev) => ({
+        ...prev,
+        [section]: prev[section].filter((item) => item.id !== id),
+      }));
+      if (addedDocuments[section].length <= 1) {
+        setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: false }));
+      }
+      setSuccess(`${section} document deleted successfully`);
+    } catch (error) {
+      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()} document`);
+      console.error(`Delete ${section} document error:`, error);
+    }
+  };
+
+  const handleUpdateFinancial = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
-    console.log({ financialData });
-    handleSubmit(e);
+
+    try {
+      const response = await axios.put(
+        `${process.env.REACT_APP_API_URL}/financial`,
+        { financialData: addedDocuments },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      setSuccess('Financial data updated successfully');
+      setAddedDocuments({
+        Banking: response.data.financialData.Banking?.map(item => ({
+          id: item._id,
+          type: item.type,
+          bankName: item.bankName,
+          accountNumber: item.accountNumber,
+          ifsc: item.ifsc,
+          fileUrl: item.fileUrl,
+        })) || [],
+        Investments: response.data.financialData.Investments?.map(item => ({
+          id: item._id,
+          type: item.type,
+          name: item.name,
+          detail: item.detail,
+          fileUrl: item.fileUrl,
+        })) || [],
+      });
+      setShowAddedDocuments({
+        banking: response.data.financialData.Banking?.length > 0,
+        investments: response.data.financialData.Investments?.length > 0,
+      });
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to update financial data');
+      console.error('Update financial error:', error);
+    }
   };
 
   return (
-    <form className="section financial-section" onSubmit={handleSectionSubmit}>
+    <form className="section financial-section" onSubmit={handleUpdateFinancial}>
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Financial Records
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
       </h3>
       <div className={`section-content ${expanded ? 'expanded' : 'collapsed'} overflow-y-auto max-h-[500px]`}>
-        {/* Bank Details */}
+        {/* Banking */}
         <div className="table-container mb-6">
-          <h4>Bank Details</h4>
+          <h4>Banking</h4>
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
+                <th className="border p-2">Type</th>
                 <th className="border p-2">Bank Name</th>
                 <th className="border p-2">Account Number</th>
                 <th className="border p-2">IFSC</th>
@@ -113,13 +327,26 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
               </tr>
             </thead>
             <tbody>
-              {financialData.BankDetails.map((item, index) => (
+              {financialData.Banking.map((item) => (
                 <tr key={item.id} className="table-row">
+                  <td className="border p-2">
+                    <select
+                      value={item.type}
+                      onChange={(e) => handleFinancialTableChange('Banking', item.id, 'type', e.target.value)}
+                      className="w-full p-1"
+                    >
+                      {bankingOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="border p-2">
                     <input
                       type="text"
                       value={item.bankName}
-                      onChange={(e) => handleFinancialTableChange('BankDetails', item.id, 'bankName', e.target.value)}
+                      onChange={(e) => handleFinancialTableChange('Banking', item.id, 'bankName', e.target.value)}
                       className="w-full p-1"
                     />
                   </td>
@@ -127,7 +354,7 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
                     <input
                       type="text"
                       value={item.accountNumber}
-                      onChange={(e) => handleFinancialTableChange('BankDetails', item.id, 'accountNumber', e.target.value)}
+                      onChange={(e) => handleFinancialTableChange('Banking', item.id, 'accountNumber', e.target.value)}
                       className="w-full p-1"
                     />
                   </td>
@@ -135,50 +362,51 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
                     <input
                       type="text"
                       value={item.ifsc}
-                      onChange={(e) => handleFinancialTableChange('BankDetails', item.id, 'ifsc', e.target.value)}
+                      onChange={(e) => handleFinancialTableChange('Banking', item.id, 'ifsc', e.target.value)}
                       className="w-full p-1"
                     />
                   </td>
                   <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleFinancialFileChange('BankDetails', item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                    {uploadcareLoaded ? (
+                      <div>
+                        <input
+                          type="hidden"
+                          data-uploadcare-id={`Banking_${item.id}`}
+                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
+                          data-images-only="false"
+                          data-max-size="104857600"
+                          data-file-types=".pdf,.jpg,.png"
+                          className="w-full"
+                        />
+                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">Loading uploader...</p>
+                    )}
                   </td>
                   <td className="border p-2">
-                    {index === financialData.BankDetails.length - 1 ? (
-                      <button
-                        onClick={() => addFinancialRow('BankDetails')}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => deleteFinancialRow('BankDetails', item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
+                    <button
+                      onClick={addFinancialRow('Banking')}
+                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
+                    >
+                      Add
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {showAddedDocuments.bankDetails && (
+        {showAddedDocuments.banking && (
           <div className="table-container mt-6">
-            <h4>Added Bank Details</h4>
-            {financialData.BankDetails.filter((item) => item.bankName || item.accountNumber || item.ifsc || item.file).length === 0 ? (
-              <p className="text-gray-500">No bank details added yet.</p>
+            <h4>Added Banking Details</h4>
+            {addedDocuments.Banking.length === 0 ? (
+              <p className="text-gray-500">No banking details added yet.</p>
             ) : (
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-100">
+                    <th className="border p-2">Type</th>
                     <th className="border p-2">Bank Name</th>
                     <th className="border p-2">Account Number</th>
                     <th className="border p-2">IFSC</th>
@@ -187,18 +415,27 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {financialData.BankDetails.filter((item) => item.bankName || item.accountNumber || item.ifsc || item.file).map((item) => (
+                  {addedDocuments.Banking.map((item) => (
                     <tr key={item.id} className="table-row">
+                      <td className="border p-2">{item.type}</td>
                       <td className="border p-2">{item.bankName || 'N/A'}</td>
                       <td className="border p-2">{item.accountNumber || 'N/A'}</td>
                       <td className="border p-2">{item.ifsc || 'N/A'}</td>
-                      <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
+                      <td className="border p-2">
+                        {item.fileUrl ? (
+                          <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                            View File
+                          </a>
+                        ) : (
+                          'No file uploaded'
+                        )}
+                      </td>
                       <td className="border p-2">
                         <button
-                          onClick={() => deleteFinancialRow('BankDetails', item.id)}
+                          onClick={deleteFinancialRow('Banking', item.id)}
                           className="text-red-500"
                         >
-                          Cancel
+                          <FaTimes />
                         </button>
                       </td>
                     </tr>
@@ -209,106 +446,119 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
           </div>
         )}
 
-        {/* Fixed Deposits */}
+        {/* Investments */}
         <div className="table-container mb-6">
-          <h4>Fixed Deposits</h4>
+          <h4>Investments</h4>
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border p-2">Bank Name</th>
-                <th className="border p-2">FD Account Number</th>
-                <th className="border p-2">IFSC</th>
+                <th className="border p-2">Type</th>
+                <th className="border p-2">Name</th>
+                <th className="border p-2">Detail</th>
                 <th className="border p-2">Upload File</th>
                 <th className="border p-2">Action</th>
               </tr>
             </thead>
             <tbody>
-              {financialData.FixedDeposits.map((item, index) => (
+              {financialData.Investments.map((item) => (
                 <tr key={item.id} className="table-row">
                   <td className="border p-2">
+                    <select
+                      value={item.type}
+                      onChange={(e) => handleFinancialTableChange('Investments', item.id, 'type', e.target.value)}
+                      className="w-full p-1"
+                    >
+                      {investmentOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="border p-2">
                     <input
                       type="text"
-                      value={item.bankName}
-                      onChange={(e) => handleFinancialTableChange('FixedDeposits', item.id, 'bankName', e.target.value)}
+                      value={item.name}
+                      onChange={(e) => handleFinancialTableChange('Investments', item.id, 'name', e.target.value)}
                       className="w-full p-1"
                     />
                   </td>
                   <td className="border p-2">
                     <input
                       type="text"
-                      value={item.fdAccountNumber}
-                      onChange={(e) => handleFinancialTableChange('FixedDeposits', item.id, 'fdAccountNumber', e.target.value)}
+                      value={item.detail}
+                      onChange={(e) => handleFinancialTableChange('Investments', item.id, 'detail', e.target.value)}
                       className="w-full p-1"
                     />
                   </td>
                   <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.ifsc}
-                      onChange={(e) => handleFinancialTableChange('FixedDeposits', item.id, 'ifsc', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleFinancialFileChange('FixedDeposits', item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                  </td>
-                  <td className="border p-2">
-                    {index === financialData.FixedDeposits.length - 1 ? (
-                      <button
-                        onClick={() => addFinancialRow('FixedDeposits')}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
+                    {uploadcareLoaded ? (
+                      <div>
+                        <input
+                          type="hidden"
+                          data-uploadcare-id={`Investments_${item.id}`}
+                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
+                          data-images-only="false"
+                          data-max-size="104857600"
+                          data-file-types=".pdf,.jpg,.png"
+                          className="w-full"
+                        />
+                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => deleteFinancialRow('FixedDeposits', item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
+                      <p className="text-gray-500">Loading uploader...</p>
                     )}
+                  </td>
+                  <td className="border p-2">
+                    <button
+                      onClick={addFinancialRow('Investments')}
+                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
+                    >
+                      Add
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {showAddedDocuments.fixedDeposits && (
+        {showAddedDocuments.investments && (
           <div className="table-container mt-6">
-            <h4>Added Fixed Deposits</h4>
-            {financialData.FixedDeposits.filter((item) => item.bankName || item.fdAccountNumber || item.ifsc || item.file).length === 0 ? (
-              <p className="text-gray-500">No fixed deposits added yet.</p>
+            <h4>Added Investments</h4>
+            {addedDocuments.Investments.length === 0 ? (
+              <p className="text-gray-500">No investments added yet.</p>
             ) : (
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-100">
-                    <th className="border p-2">Bank Name</th>
-                    <th className="border p-2">FD Account Number</th>
-                    <th className="border p-2">IFSC</th>
+                    <th className="border p-2">Type</th>
+                    <th className="border p-2">Name</th>
+                    <th className="border p-2">Detail</th>
                     <th className="border p-2">View File</th>
                     <th className="border p-2">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {financialData.FixedDeposits.filter((item) => item.bankName || item.fdAccountNumber || item.ifsc || item.file).map((item) => (
+                  {addedDocuments.Investments.map((item) => (
                     <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.bankName || 'N/A'}</td>
-                      <td className="border p-2">{item.fdAccountNumber || 'N/A'}</td>
-                      <td className="border p-2">{item.ifsc || 'N/A'}</td>
-                      <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
+                      <td className="border p-2">{item.type}</td>
+                      <td className="border p-2">{item.name || 'N/A'}</td>
+                      <td className="border p-2">{item.detail || 'N/A'}</td>
+                      <td className="border p-2">
+                        {item.fileUrl ? (
+                          <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                            View File
+                          </a>
+                        ) : (
+                          'No file uploaded'
+                        )}
+                      </td>
                       <td className="border p-2">
                         <button
-                          onClick={() => deleteFinancialRow('FixedDeposits', item.id)}
+                          onClick={deleteFinancialRow('Investments', item.id)}
                           className="text-red-500"
                         >
-                          Cancel
+                          <FaTimes />
                         </button>
                       </td>
                     </tr>
@@ -319,434 +569,12 @@ const FinancialSection = ({ setError, setSuccess, handleSubmit }) => {
           </div>
         )}
 
-        {/* Mutual Funds */}
-        <div className="table-container mb-6">
-          <h4>Mutual Funds</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Scheme Name</th>
-                <th className="border p-2">Fund Manager</th>
-                <th className="border p-2">Type of Scheme</th>
-                <th className="border p-2">Upload File</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {financialData.MutualFunds.map((item, index) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.schemeName}
-                      onChange={(e) => handleFinancialTableChange('MutualFunds', item.id, 'schemeName', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.fundManager}
-                      onChange={(e) => handleFinancialTableChange('MutualFunds', item.id, 'fundManager', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.typeOfScheme}
-                      onChange={(e) => handleFinancialTableChange('MutualFunds', item.id, 'typeOfScheme', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleFinancialFileChange('MutualFunds', item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                  </td>
-                  <td className="border p-2">
-                    {index === financialData.MutualFunds.length - 1 ? (
-                      <button
-                        onClick={() => addFinancialRow('MutualFunds')}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => deleteFinancialRow('MutualFunds', item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.mutualFunds && (
-          <div className="table-container mt-6">
-            <h4>Added Mutual Funds</h4>
-            {financialData.MutualFunds.filter((item) => item.schemeName || item.fundManager || item.typeOfScheme || item.file).length === 0 ? (
-              <p className="text-gray-500">No mutual funds added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Scheme Name</th>
-                    <th className="border p-2">Fund Manager</th>
-                    <th className="border p-2">Type of Scheme</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {financialData.MutualFunds.filter((item) => item.schemeName || item.fundManager || item.typeOfScheme || item.file).map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.schemeName || 'N/A'}</td>
-                      <td className="border p-2">{item.fundManager || 'N/A'}</td>
-                      <td className="border p-2">{item.typeOfScheme || 'N/A'}</td>
-                      <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
-                      <td className="border p-2">
-                        <button
-                          onClick={() => deleteFinancialRow('MutualFunds', item.id)}
-                          className="text-red-500"
-                        >
-                          Cancel
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* PF Details */}
-        <div className="table-container mb-6">
-          <h4>PF Details</h4>
-          <div className="form-grid">
-            <div className="form-row">
-              <div className="grid grid-cols-2 gap-2 items-center">
-                <div>
-                  <label htmlFor="PfDetails">PF Number:</label>
-                  <input
-                    type="text"
-                    id="PfDetails"
-                    name="PfDetails"
-                    value={financialData.PfDetails}
-                    onChange={handleInputChange}
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Insurance Policies */}
-        <div className="table-container mb-6">
-          <h4>Insurance Policies</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Policy Name</th>
-                <th className="border p-2">Policy Number</th>
-                <th className="border p-2">Upload File</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {financialData.InsurancePolicies.map((item, index) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.policyName}
-                      onChange={(e) => handleFinancialTableChange('InsurancePolicies', item.id, 'policyName', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.policyNumber}
-                      onChange={(e) => handleFinancialTableChange('InsurancePolicies', item.id, 'policyNumber', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleFinancialFileChange('InsurancePolicies', item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                  </td>
-                  <td className="border p-2">
-                    {index === financialData.InsurancePolicies.length - 1 ? (
-                      <button
-                        onClick={() => addFinancialRow('InsurancePolicies')}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => deleteFinancialRow('InsurancePolicies', item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.insurancePolicies && (
-          <div className="table-container mt-6">
-            <h4>Added Insurance Policies</h4>
-            {financialData.InsurancePolicies.filter((item) => item.policyName || item.policyNumber || item.file).length === 0 ? (
-              <p className="text-gray-500">No insurance policies added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Policy Name</th>
-                    <th className="border p-2">Policy Number</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {financialData.InsurancePolicies.filter((item) => item.policyName || item.policyNumber || item.file).map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.policyName || 'N/A'}</td>
-                      <td className="border p-2">{item.policyNumber || 'N/A'}</td>
-                      <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
-                      <td className="border p-2">
-                        <button
-                          onClick={() => deleteFinancialRow('InsurancePolicies', item.id)}
-                          className="text-red-500"
-                        >
-                          Cancel
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* Business Ownership */}
-        <div className="table-container mb-6">
-          <h4>Business Ownership</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Business Name</th>
-                <th className="border p-2">Investment</th>
-                <th className="border p-2">Upload File</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {financialData.BusinessOwnership.map((item, index) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.businessName}
-                      onChange={(e) => handleFinancialTableChange('BusinessOwnership', item.id, 'businessName', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.investment}
-                      onChange={(e) => handleFinancialTableChange('BusinessOwnership', item.id, 'investment', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleFinancialFileChange('BusinessOwnership', item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                  </td>
-                  <td className="border p-2">
-                    {index === financialData.BusinessOwnership.length - 1 ? (
-                      <button
-                        onClick={() => addFinancialRow('BusinessOwnership')}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => deleteFinancialRow('BusinessOwnership', item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.businessOwnership && (
-          <div className="table-container mt-6">
-            <h4>Added Business Ownership</h4>
-            {financialData.BusinessOwnership.filter((item) => item.businessName || item.investment || item.file).length === 0 ? (
-              <p className="text-gray-500">No business ownership added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Business Name</th>
-                    <th className="border p-2">Investment</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {financialData.BusinessOwnership.filter((item) => item.businessName || item.investment || item.file).map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.businessName || 'N/A'}</td>
-                      <td className="border p-2">{item.investment || 'N/A'}</td>
-                      <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
-                      <td className="border p-2">
-                        <button
-                          onClick={() => deleteFinancialRow('BusinessOwnership', item.id)}
-                          className="text-red-500"
-                        >
-                          Cancel
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* Crypto Accounts */}
-        <div className="table-container mb-6">
-          <h4>Crypto Accounts</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Vendor</th>
-                <th className="border p-2">Account Name</th>
-                <th className="border p-2">Upload File</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {financialData.CryptoAccounts.map((item, index) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.vendor}
-                      onChange={(e) => handleFinancialTableChange('CryptoAccounts', item.id, 'vendor', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.accountName}
-                      onChange={(e) => handleFinancialTableChange('CryptoAccounts', item.id, 'accountName', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="file"
-                      onChange={handleFinancialFileChange('CryptoAccounts', item.id)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png"
-                    />
-                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                  </td>
-                  <td className="border p-2">
-                    {index === financialData.CryptoAccounts.length - 1 ? (
-                      <button
-                        onClick={() => addFinancialRow('CryptoAccounts')}
-                        className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => deleteFinancialRow('CryptoAccounts', item.id)}
-                        className="text-red-500"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.cryptoAccounts && (
-          <div className="table-container mt-6">
-            <h4>Added Crypto Accounts</h4>
-            {financialData.CryptoAccounts.filter((item) => item.vendor || item.accountName || item.file).length === 0 ? (
-              <p className="text-gray-500">No crypto accounts added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Vendor</th>
-                    <th className="border p-2">Account Name</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {financialData.CryptoAccounts.filter((item) => item.vendor || item.accountName || item.file).map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.vendor || 'N/A'}</td>
-                      <td className="border p-2">{item.accountName || 'N/A'}</td>
-                      <td className="border p-2">{item.file ? item.file.name : 'No file uploaded'}</td>
-                      <td className="border p-2">
-                        <button
-                          onClick={() => deleteFinancialRow('CryptoAccounts', item.id)}
-                          className="text-red-500"
-                        >
-                          Cancel
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
+        <button
+          type="submit"
+          className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+        >
+          Update Financial Details
+        </button>
       </div>
     </form>
   );

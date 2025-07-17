@@ -2,7 +2,7 @@ const Financial = require('../models/Financial');
 
 exports.createFinancial = async (req, res) => {
   try {
-    const { BankDetails, FixedDeposits, MutualFunds, PfDetails, InsurancePolicies, BusinessOwnership, CryptoAccounts } = req.body;
+    const { financialData } = req.body;
     const fileUrls = req.uploadcareUuids || [];
 
     const parseIfString = (data) => (typeof data === 'string' ? JSON.parse(data) : data);
@@ -19,13 +19,8 @@ exports.createFinancial = async (req, res) => {
 
     const financial = new Financial({
       userId: req.user.id,
-      BankDetails: updateDetails(BankDetails, fileUrls.slice(0, parseIfString(BankDetails).length)),
-      FixedDeposits: updateDetails(FixedDeposits, fileUrls.slice(parseIfString(BankDetails).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length)),
-      MutualFunds: updateDetails(MutualFunds, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length)),
-      PfDetails: parseIfString(PfDetails),
-      InsurancePolicies: updateDetails(InsurancePolicies, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length)),
-      BusinessOwnership: updateDetails(BusinessOwnership, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length + parseIfString(BusinessOwnership).length)),
-      CryptoAccounts: updateDetails(CryptoAccounts, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length + parseIfString(BusinessOwnership).length)),
+      Banking: updateDetails(financialData.Banking, fileUrls.slice(0, parseIfString(financialData.Banking).length)),
+      Investments: updateDetails(financialData.Investments, fileUrls.slice(parseIfString(financialData.Banking).length)),
     });
 
     await financial.save();
@@ -41,7 +36,7 @@ exports.getFinancial = async (req, res) => {
     if (!financial) {
       return res.status(404).json({ message: 'Financial data not found' });
     }
-    res.status(200).json(financial);
+    res.status(200).json({ financialData: financial });
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch financial data', error: error.message });
   }
@@ -49,7 +44,7 @@ exports.getFinancial = async (req, res) => {
 
 exports.updateFinancial = async (req, res) => {
   try {
-    const { BankDetails, FixedDeposits, MutualFunds, PfDetails, InsurancePolicies, BusinessOwnership, CryptoAccounts } = req.body;
+    const { financialData } = req.body;
     const fileUrls = req.uploadcareUuids || [];
 
     const parseIfString = (data) => (typeof data === 'string' ? JSON.parse(data) : data);
@@ -67,17 +62,12 @@ exports.updateFinancial = async (req, res) => {
     const financial = await Financial.findOneAndUpdate(
       { userId: req.user.id },
       {
-        BankDetails: updateDetails(BankDetails, fileUrls.slice(0, parseIfString(BankDetails).length)),
-        FixedDeposits: updateDetails(FixedDeposits, fileUrls.slice(parseIfString(BankDetails).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length)),
-        MutualFunds: updateDetails(MutualFunds, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length)),
-        PfDetails: parseIfString(PfDetails),
-        InsurancePolicies: updateDetails(InsurancePolicies, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length)),
-        BusinessOwnership: updateDetails(BusinessOwnership, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length, parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length + parseIfString(BusinessOwnership).length)),
-        CryptoAccounts: updateDetails(CryptoAccounts, fileUrls.slice(parseIfString(BankDetails).length + parseIfString(FixedDeposits).length + parseIfString(MutualFunds).length + parseIfString(InsurancePolicies).length + parseIfString(BusinessOwnership).length)),
+        Banking: updateDetails(financialData.Banking, fileUrls.slice(0, parseIfString(financialData.Banking).length)),
+        Investments: updateDetails(financialData.Investments, fileUrls.slice(parseIfString(financialData.Banking).length)),
       },
       { new: true, upsert: true }
     );
-    res.status(200).json({ message: 'Financial data updated', financial });
+    res.status(200).json({ message: 'Financial data updated', financialData: financial });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update financial data', error: error.message });
   }
@@ -89,5 +79,57 @@ exports.deleteFinancial = async (req, res) => {
     res.status(200).json({ message: 'Financial data deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete financial data', error: error.message });
+  }
+};
+
+exports.addFinancialDocument = async (req, res) => {
+  try {
+    const { type, bankName, accountNumber, ifsc, name, detail, fileUrl } = req.body;
+    const financial = await Financial.findOne({ userId: req.user.id });
+
+    if (!financial) {
+      return res.status(404).json({ message: 'Financial data not found' });
+    }
+
+    const newDocument = {
+      _id: new mongoose.Types.ObjectId(),
+      type,
+      ...(bankName ? { bankName } : {}),
+      ...(accountNumber ? { accountNumber } : {}),
+      ...(ifsc ? { ifsc } : {}),
+      ...(name ? { name } : {}),
+      ...(detail ? { detail } : {}),
+      fileUrl,
+    };
+
+    if (['Bank Account', 'Fixed Deposit', 'Recurring Deposit', 'Other Bank Related'].includes(type)) {
+      financial.Banking.push(newDocument);
+    } else if (['Mutual Fund', 'Business Ownership', 'Crypto Account', 'Demat Account', 'PF Account'].includes(type)) {
+      financial.Investments.push(newDocument);
+    }
+
+    await financial.save();
+    res.status(201).json({ message: 'Document added successfully', document: newDocument });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to add document', error: error.message });
+  }
+};
+
+exports.deleteFinancialDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const financial = await Financial.findOne({ userId: req.user.id });
+
+    if (!financial) {
+      return res.status(404).json({ message: 'Financial data not found' });
+    }
+
+    financial.Banking = financial.Banking.filter((item) => item._id.toString() !== id);
+    financial.Investments = financial.Investments.filter((item) => item._id.toString() !== id);
+
+    await financial.save();
+    res.status(200).json({ message: 'Document deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete document', error: error.message });
   }
 };

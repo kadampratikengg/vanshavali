@@ -2,49 +2,22 @@ const mongoose = require('mongoose');
 
 const financialSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  BankDetails: [
+  Banking: [
     {
+      _id: { type: mongoose.Schema.Types.ObjectId, default: mongoose.Types.ObjectId },
+      type: { type: String, trim: true },
       bankName: { type: String, trim: true },
       accountNumber: { type: String, trim: true },
       ifsc: { type: String, trim: true },
       fileUrl: { type: String },
     },
   ],
-  FixedDeposits: [
+  Investments: [
     {
-      bankName: { type: String, trim: true },
-      fdAccountNumber: { type: String, trim: true },
-      ifsc: { type: String, trim: true },
-      fileUrl: { type: String },
-    },
-  ],
-  MutualFunds: [
-    {
-      schemeName: { type: String, trim: true },
-      fundManager: { type: String, trim: true },
-      typeOfScheme: { type: String, trim: true },
-      fileUrl: { type: String },
-    },
-  ],
-  PfDetails: { type: String, trim: true },
-  InsurancePolicies: [
-    {
-      policyName: { type: String, trim: true },
-      policyNumber: { type: String, trim: true },
-      fileUrl: { type: String },
-    },
-  ],
-  BusinessOwnership: [
-    {
-      businessName: { type: String, trim: true },
-      investment: { type: String, trim: true },
-      fileUrl: { type: String },
-    },
-  ],
-  CryptoAccounts: [
-    {
-      vendor: { type: String, trim: true },
-      accountName: { type: String, trim: true },
+      _id: { type: mongoose.Schema.Types.ObjectId, default: mongoose.Types.ObjectId },
+      type: { type: String, trim: true },
+      name: { type: String, trim: true },
+      detail: { type: String, trim: true },
       fileUrl: { type: String },
     },
   ],
