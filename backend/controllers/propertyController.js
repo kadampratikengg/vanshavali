@@ -2,24 +2,28 @@ const Property = require('../models/Property');
 
 exports.createProperty = async (req, res) => {
   try {
-    const { propertyDetails, vehicleDetails, transactionDetails } = req.body;
+    const { propertyData } = req.body;
+    const parsedPropertyData = typeof propertyData === 'string' ? JSON.parse(propertyData) : propertyData;
     const fileUrls = req.uploadcareUuids || [];
 
-    const updateDetails = (details, sectionFiles) => {
-      let fileIndex = 0;
-      return details.map((item) => {
-        if (sectionFiles && sectionFiles[fileIndex]) {
-          return { ...item, fileUrl: `https://ucarecdn.com/${sectionFiles[fileIndex++]}/` };
-        }
-        return item;
-      });
+    const updatedPropertyData = {
+      PropertyDetails: parsedPropertyData.PropertyDetails.map((item, index) => ({
+        ...item,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : null,
+      })),
+      VehicleDetails: parsedPropertyData.VehicleDetails.map((item, index) => ({
+        ...item,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : null,
+      })),
+      TransactionDetails: parsedPropertyData.TransactionDetails.map((item, index) => ({
+        ...item,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : null,
+      })),
     };
 
     const property = new Property({
       userId: req.user.id,
-      propertyDetails: updateDetails(propertyDetails, fileUrls.slice(0, propertyDetails.length)),
-      vehicleDetails: updateDetails(vehicleDetails, fileUrls.slice(propertyDetails.length, propertyDetails.length + vehicleDetails.length)),
-      transactionDetails: updateDetails(transactionDetails, fileUrls.slice(propertyDetails.length + vehicleDetails.length)),
+      propertyData: updatedPropertyData,
     });
 
     await property.save();
@@ -43,26 +47,28 @@ exports.getProperty = async (req, res) => {
 
 exports.updateProperty = async (req, res) => {
   try {
-    const { propertyDetails, vehicleDetails, transactionDetails } = req.body;
+    const { propertyData } = req.body;
+    const parsedPropertyData = typeof propertyData === 'string' ? JSON.parse(propertyData) : propertyData;
     const fileUrls = req.uploadcareUuids || [];
 
-    const updateDetails = (details, sectionFiles) => {
-      let fileIndex = 0;
-      return details.map((item) => {
-        if (sectionFiles && sectionFiles[fileIndex]) {
-          return { ...item, fileUrl: `https://ucarecdn.com/${sectionFiles[fileIndex++]}/` };
-        }
-        return item;
-      });
+    const updatedPropertyData = {
+      PropertyDetails: parsedPropertyData.PropertyDetails.map((item, index) => ({
+        ...item,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : item.fileUrl,
+      })),
+      VehicleDetails: parsedPropertyData.VehicleDetails.map((item, index) => ({
+        ...item,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : item.fileUrl,
+      })),
+      TransactionDetails: parsedPropertyData.TransactionDetails.map((item, index) => ({
+        ...item,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : item.fileUrl,
+      })),
     };
 
     const property = await Property.findOneAndUpdate(
       { userId: req.user.id },
-      {
-        propertyDetails: updateDetails(propertyDetails, fileUrls.slice(0, propertyDetails.length)),
-        vehicleDetails: updateDetails(vehicleDetails, fileUrls.slice(propertyDetails.length, propertyDetails.length + vehicleDetails.length)),
-        transactionDetails: updateDetails(transactionDetails, fileUrls.slice(propertyDetails.length + vehicleDetails.length)),
-      },
+      { propertyData: updatedPropertyData },
       { new: true, upsert: true }
     );
     res.status(200).json({ message: 'Property data updated', property });
