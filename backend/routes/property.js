@@ -12,76 +12,10 @@ router.get('/', authenticateToken, async (req, res) => {
     }
     res.status(200).json(property);
   } catch (error) {
-    console.error('GET /property error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-router.post('/', authenticateToken, async (req, res) => {
-  try {
-    const { propertyData } = req.body;
-    if (!propertyData) {
-      return res.status(400).json({ message: 'propertyData is required' });
-    }
-    const property = await Property.findOneAndUpdate(
-      { userId: new mongoose.Types.ObjectId(req.user.id) },
-      { $set: { propertyData } },
-      { new: true, upsert: true }
-    );
-    res.status(201).json({ message: 'Property data saved', property });
-  } catch (error) {
-    console.error('POST /property error:', {
+    console.error('GET /property error:', {
       error: error.message,
       stack: error.stack,
       userId: req.user.id,
-      propertyData: req.body.propertyData,
-    });
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-router.put('/', authenticateToken, async (req, res) => {
-  try {
-    const { propertyData } = req.body;
-    if (!propertyData) {
-      return res.status(400).json({ message: 'propertyData is required' });
-    }
-    const updatedPropertyData = {
-      PropertyDetails: propertyData.PropertyDetails.map(item => ({
-        _id: item.id && mongoose.Types.ObjectId.isValid(item.id) ? new mongoose.Types.ObjectId(item.id) : new mongoose.Types.ObjectId(),
-        propertyNumber: item.propertyNumber,
-        areaAddress: item.areaAddress,
-        pincode: item.pincode,
-        landType: item.landType,
-        fileUrl: item.fileUrl,
-      })),
-      VehicleDetails: propertyData.VehicleDetails.map(item => ({
-        _id: item.id && mongoose.Types.ObjectId.isValid(item.id) ? new mongoose.Types.ObjectId(item.id) : new mongoose.Types.ObjectId(),
-        vehicleNumber: item.vehicleNumber,
-        vehicleModel: item.vehicleModel,
-        vehicleInsurance: item.vehicleInsurance,
-        fileUrl: item.fileUrl,
-      })),
-      TransactionDetails: propertyData.TransactionDetails.map(item => ({
-        _id: item.id && mongoose.Types.ObjectId.isValid(item.id) ? new mongoose.Types.ObjectId(item.id) : new mongoose.Types.ObjectId(),
-        type: item.type,
-        documentNumber: item.documentNumber,
-        details: item.details,
-        fileUrl: item.fileUrl,
-      })),
-    };
-    const property = await Property.findOneAndUpdate(
-      { userId: new mongoose.Types.ObjectId(req.user.id) },
-      { $set: { propertyData: updatedPropertyData } },
-      { new: true, upsert: true }
-    );
-    res.status(200).json({ message: 'Property data updated', property });
-  } catch (error) {
-    console.error('PUT /property error:', {
-      error: error.message,
-      stack: error.stack,
-      userId: req.user.id,
-      propertyData: req.body.propertyData,
     });
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -89,48 +23,83 @@ router.put('/', authenticateToken, async (req, res) => {
 
 router.post('/document', authenticateToken, async (req, res) => {
   try {
-    const { propertyNumber, areaAddress, pincode, landType, vehicleNumber, vehicleModel, vehicleInsurance, type, documentNumber, details, fileUrl } = req.body;
-    if (!fileUrl || (!propertyNumber && !vehicleNumber && !type)) {
-      return res.status(400).json({ message: 'File URL and at least one relevant field are required' });
+    const { type, number, remark, fileUrl, section } = req.body;
+    console.log('Received POST /property/document request:', {
+      userId: req.user.id,
+      body: { type, number, remark, fileUrl, section },
+    });
+
+    if (!fileUrl || !type || !number || !section) {
+      console.warn('Validation failed: Missing required fields', { type, number, fileUrl, section });
+      return res.status(400).json({ message: 'File URL, document type, number, and section are required' });
     }
+
+    const validSections = ['Property Details', 'Vehicle Details', 'Sale, Purchase, Agreements, Rent Details'];
+    if (!validSections.includes(section)) {
+      console.warn('Validation failed: Invalid section', { section });
+      return res.status(400).json({ message: `Invalid section. Must be one of: ${validSections.join(', ')}` });
+    }
+
     let property = await Property.findOne({ userId: new mongoose.Types.ObjectId(req.user.id) });
     if (!property) {
+      console.log('No existing property found, creating new one for user:', req.user.id);
       property = new Property({ userId: new mongoose.Types.ObjectId(req.user.id), propertyData: { PropertyDetails: [], VehicleDetails: [], TransactionDetails: [] } });
     }
-    let section;
+
     let newDocument;
-    if (propertyNumber || areaAddress || pincode || landType) {
-      section = 'PropertyDetails';
+    if (section === 'Property Details') {
       newDocument = {
         _id: new mongoose.Types.ObjectId(),
-        propertyNumber,
-        areaAddress,
-        pincode,
-        landType,
+        propertyNumber: number,
+        areaAddress: remark || '',
+        pincode: '',
+        landType: type,
         fileUrl,
       };
-    } else if (vehicleNumber || vehicleModel || vehicleInsurance) {
-      section = 'VehicleDetails';
+      property.propertyData.PropertyDetails.push(newDocument);
+    } else if (section === 'Vehicle Details') {
       newDocument = {
         _id: new mongoose.Types.ObjectId(),
-        vehicleNumber,
-        vehicleModel,
-        vehicleInsurance,
+        vehicleNumber: number,
+        vehicleModel: remark || '',
+        vehicleInsurance: type,
         fileUrl,
       };
-    } else {
-      section = 'TransactionDetails';
+      property.propertyData.VehicleDetails.push(newDocument);
+    } else if (section === 'Sale, Purchase, Agreements, Rent Details') {
       newDocument = {
         _id: new mongoose.Types.ObjectId(),
         type,
-        documentNumber,
-        details,
+        documentNumber: number,
+        details: remark || '',
         fileUrl,
       };
+      property.propertyData.TransactionDetails.push(newDocument);
     }
-    property.propertyData[section].push(newDocument);
-    await property.save();
-    res.status(201).json({ message: 'Document added', document: newDocument });
+
+    try {
+      await property.save();
+      console.log('Document saved successfully:', newDocument);
+    } catch (saveError) {
+      console.error('Error saving document to MongoDB:', {
+        error: saveError.message,
+        stack: saveError.stack,
+        document: newDocument,
+      });
+      throw saveError;
+    }
+
+    res.status(201).json({
+      message: 'Document added',
+      document: {
+        _id: newDocument._id,
+        section,
+        type: newDocument.landType || newDocument.vehicleInsurance || newDocument.type,
+        number: newDocument.propertyNumber || newDocument.vehicleNumber || newDocument.documentNumber,
+        remark: newDocument.areaAddress || newDocument.vehicleModel || newDocument.details || '',
+        fileUrl: newDocument.fileUrl,
+      },
+    });
   } catch (error) {
     console.error('POST /property/document error:', {
       error: error.message,

@@ -4,26 +4,54 @@ import axios from 'axios';
 
 const PropertySection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
-  const [propertyData, setPropertyData] = useState({
-    PropertyDetails: [{ id: 1, propertyNumber: '', areaAddress: '', pincode: '', landType: 'Select Land Type', file: null, fileUuid: null }],
-    VehicleDetails: [{ id: 1, vehicleNumber: '', vehicleModel: '', vehicleInsurance: '', file: null, fileUuid: null }],
-    TransactionDetails: [{ id: 1, type: 'Select Type', documentNumber: '', details: '', file: null, fileUuid: null }],
-  });
-  const [showAddedDocuments, setShowAddedDocuments] = useState({
-    propertyDetails: false,
-    vehicleDetails: false,
-    transactionDetails: false,
-  });
-  const [addedDocuments, setAddedDocuments] = useState({
-    PropertyDetails: [],
-    VehicleDetails: [],
-    TransactionDetails: [],
-  });
+  const [propertyData, setPropertyData] = useState([{
+    id: 1,
+    section: 'Property Details',
+    documentType: 'Select Document',
+    documentNumber: '',
+    remark: '',
+    file: null,
+    fileUuid: null,
+  }]);
+  const [addedDocuments, setAddedDocuments] = useState([]);
+  const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
 
-  const landTypeOptions = ['Select Land Type', 'Residential', 'Commercial', 'Agricultural', 'Industrial'];
-  const transactionTypeOptions = ['Select Type', 'Sale', 'Purchase', 'Agreements', 'Rent'];
+  const documentOptions = {
+    'Property Details': ['Select Document', 'Property Deed', '7/12 Extract', 'Title Document', 'Other'],
+    'Vehicle Details': ['Select Document', 'RC Book', 'Insurance Document', 'PUC Certificate', 'Other'],
+    'Sale, Purchase, Agreements, Rent Details': ['Select Document', 'Sale Agreement', 'Purchase Agreement', 'Rent Agreement', 'Other'],
+  };
+
+  const allDocumentTypes = [
+    ...new Set(Object.values(documentOptions).flat()),
+  ].sort();
+
+  const validateInput = (section, documentType, documentNumber) => {
+    if (documentType === 'Select Document') {
+      return 'Please select a valid document type';
+    }
+    if (!documentNumber) {
+      return 'Document number is required';
+    }
+    if (section === 'Property Details' && documentNumber) {
+      if (!/^[A-Za-z0-9/-]{1,50}$/.test(documentNumber)) {
+        return 'Property Document Number must be alphanumeric with optional slashes or hyphens (max 50 characters)';
+      }
+    }
+    if (section === 'Vehicle Details' && documentNumber) {
+      if (!/^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$/.test(documentNumber)) {
+        return 'Vehicle Number must be in format XX00XX0000';
+      }
+    }
+    if (section === 'Sale, Purchase, Agreements, Rent Details' && documentNumber) {
+      if (!/^[A-Za-z0-9/-]{1,50}$/.test(documentNumber)) {
+        return 'Transaction Document Number must be alphanumeric with optional slashes or hyphens (max 50 characters)';
+      }
+    }
+    return '';
+  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -41,8 +69,9 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
         }
         setUploadcareLoaded(true);
       } catch (error) {
-        setError('Failed to load Uploadcare widget');
         console.error('Uploadcare load error:', error);
+        setError('Failed to load Uploadcare widget. Please try again later.');
+        setTimeout(loadUploadcare, 5000);
       }
     };
     loadUploadcare();
@@ -54,32 +83,42 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
       return;
     }
 
-    Object.keys(propertyData).forEach((section) => {
-      propertyData[section].forEach((item) => {
-        if (!widgetRefs.current[`${section}_${item.id}`]) {
+    const initializeWidgets = () => {
+      propertyData.forEach((item) => {
+        if (!widgetRefs.current[`${item.section}_${item.id}`]) {
+          const selector = `[data-uploadcare-id="${item.section}_${item.id}"]`;
+          const element = document.querySelector(selector);
+          if (!element) {
+            console.warn(`No DOM element found for selector ${selector}. Retrying...`);
+            return;
+          }
           try {
-            console.log(`Initializing Uploadcare widget for ${section} ID: ${item.id}`);
-            const widget = window.uploadcare.Widget(`[data-uploadcare-id="${section}_${item.id}"]`);
+            console.log(`Initializing Uploadcare widget for ${item.section} ID: ${item.id}`);
+            const widget = window.uploadcare.Widget(selector);
             widget.onUploadComplete((file) => {
-              console.log(`File uploaded for ${section} ID ${item.id}:`, file);
-              setPropertyData((prev) => ({
-                ...prev,
-                [section]: prev[section].map((row) =>
+              console.log(`File uploaded for ${item.section} ID ${item.id}:`, file);
+              setPropertyData((prev) =>
+                prev.map((row) =>
                   row.id === item.id ? { ...row, file, fileUuid: file.uuid } : row
-                ),
-              }));
+                )
+              );
             });
-            widgetRefs.current[`${section}_${item.id}`] = widget;
-            console.log(`Uploadcare widget initialized for ${section} ID: ${item.id}`);
+            widgetRefs.current[`${item.section}_${item.id}`] = widget;
+            console.log(`Uploadcare widget initialized for ${item.section} ID: ${item.id}`);
           } catch (error) {
+            console.error(`Uploadcare widget error for ${item.section} ID: ${item.id}`, error);
             setError('Failed to initialize Uploadcare widget');
-            console.error(`Uploadcare widget error for ${section} ID:`, item.id, error);
           }
         }
       });
-    });
+    };
+
+    const timer = setTimeout(() => {
+      initializeWidgets();
+    }, 100);
 
     return () => {
+      clearTimeout(timer);
       Object.values(widgetRefs.current).forEach((widget) => {
         try {
           console.log('Cleaning up Uploadcare widget');
@@ -96,64 +135,91 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
       try {
         if (!token) {
           setError('No authentication token found');
+          console.log('Token missing');
           return;
         }
+        console.log('Fetching property data with token:', token);
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/property`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Backend response:', JSON.stringify(response.data, null, 2));
         const { propertyData: fetchedData } = response.data;
-        setPropertyData(fetchedData || {
-          PropertyDetails: [{ id: 1, propertyNumber: '', areaAddress: '', pincode: '', landType: 'Select Land Type', file: null, fileUuid: null }],
-          VehicleDetails: [{ id: 1, vehicleNumber: '', vehicleModel: '', vehicleInsurance: '', file: null, fileUuid: null }],
-          TransactionDetails: [{ id: 1, type: 'Select Type', documentNumber: '', details: '', file: null, fileUuid: null }],
-        });
-        setAddedDocuments({
-          PropertyDetails: fetchedData?.PropertyDetails?.map(item => ({
-            id: item._id,
-            propertyNumber: item.propertyNumber,
-            areaAddress: item.areaAddress,
-            pincode: item.pincode,
-            landType: item.landType,
-            fileUrl: item.fileUrl,
-          })) || [],
-          VehicleDetails: fetchedData?.VehicleDetails?.map(item => ({
-            id: item._id,
-            vehicleNumber: item.vehicleNumber,
-            vehicleModel: item.vehicleModel,
-            vehicleInsurance: item.vehicleInsurance,
-            fileUrl: item.fileUrl,
-          })) || [],
-          TransactionDetails: fetchedData?.TransactionDetails?.map(item => ({
-            id: item._id,
-            type: item.type,
-            documentNumber: item.documentNumber,
-            details: item.details,
-            fileUrl: item.fileUrl,
-          })) || [],
-        });
-        setShowAddedDocuments({
-          propertyDetails: fetchedData?.PropertyDetails?.length > 0,
-          vehicleDetails: fetchedData?.VehicleDetails?.length > 0,
-          transactionDetails: fetchedData?.TransactionDetails?.length > 0,
-        });
+
+        if (!fetchedData || typeof fetchedData !== 'object') {
+          console.warn('Invalid or missing propertyData in response:', fetchedData);
+          setError('Invalid data received from server');
+          return;
+        }
+
+        const newPropertyData = [{
+          id: 1,
+          section: 'Property Details',
+          documentType: 'Select Document',
+          documentNumber: '',
+          remark: '',
+          file: null,
+          fileUuid: null,
+        }];
+        const newAddedDocuments = [
+          ...(Array.isArray(fetchedData.PropertyDetails)
+            ? fetchedData.PropertyDetails.map(item => ({
+                id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
+                section: 'Property Details',
+                documentType: item.landType || 'Select Document',
+                documentNumber: item.propertyNumber || '',
+                remark: item.areaAddress || '',
+                fileUrl: item.fileUrl || null,
+              }))
+            : []),
+          ...(Array.isArray(fetchedData.VehicleDetails)
+            ? fetchedData.VehicleDetails.map(item => ({
+                id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
+                section: 'Vehicle Details',
+                documentType: item.vehicleInsurance || 'Select Document',
+                documentNumber: item.vehicleNumber || '',
+                remark: item.vehicleModel || '',
+                fileUrl: item.fileUrl || null,
+              }))
+            : []),
+          ...(Array.isArray(fetchedData.TransactionDetails)
+            ? fetchedData.TransactionDetails.map(item => ({
+                id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
+                section: 'Sale, Purchase, Agreements, Rent Details',
+                documentType: item.type || 'Select Document',
+                documentNumber: item.documentNumber || '',
+                remark: item.details || '',
+                fileUrl: item.fileUrl || null,
+              }))
+            : []),
+        ];
+        setPropertyData(newPropertyData);
+        setAddedDocuments(newAddedDocuments);
+        console.log('Transformed propertyData:', JSON.stringify(newPropertyData, null, 2));
+        console.log('Transformed addedDocuments:', JSON.stringify(newAddedDocuments, null, 2));
+        setValidationErrors(newPropertyData.map(item => ({ id: item.id, error: '' })));
+        console.log('validationErrors:', JSON.stringify(
+          newPropertyData.map(item => ({ id: item.id, error: '' })),
+          null,
+          2
+        ));
+        setExpanded(true);
       } catch (error) {
+        console.error('Fetch error:', error);
         if (error.response?.status === 404) {
           console.warn('Property endpoint not found, using default data');
-          setPropertyData({
-            PropertyDetails: [{ id: 1, propertyNumber: '', areaAddress: '', pincode: '', landType: 'Select Land Type', file: null, fileUuid: null }],
-            VehicleDetails: [{ id: 1, vehicleNumber: '', vehicleModel: '', vehicleInsurance: '', file: null, fileUuid: null }],
-            TransactionDetails: [{ id: 1, type: 'Select Type', documentNumber: '', details: '', file: null, fileUuid: null }],
-          });
-          setAddedDocuments({
-            PropertyDetails: [],
-            VehicleDetails: [],
-            TransactionDetails: [],
-          });
-          setShowAddedDocuments({
-            propertyDetails: false,
-            vehicleDetails: false,
-            transactionDetails: false,
-          });
+          const defaultData = [{
+            id: 1,
+            section: 'Property Details',
+            documentType: 'Select Document',
+            documentNumber: '',
+            remark: '',
+            file: null,
+            fileUuid: null,
+          }];
+          setPropertyData(defaultData);
+          setAddedDocuments([]);
+          setValidationErrors([{ id: 1, error: '' }]);
+          setExpanded(true);
         } else {
           setError(error.response?.data?.message || 'Failed to fetch property data');
         }
@@ -162,45 +228,63 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
     fetchPropertyData();
   }, [setError, token]);
 
-  const handleTableChange = (section, id, field, value) => {
-    setPropertyData((prev) => ({
-      ...prev,
-      [section]: prev[section].map((item) =>
+  const handleTableChange = (id, field, value) => {
+    setPropertyData((prev) =>
+      prev.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
-      ),
-    }));
+      )
+    );
+    if (field === 'documentNumber' || field === 'documentType' || field === 'section') {
+      const updatedRow = propertyData.find((item) => item.id === id);
+      const error = validateInput(
+        field === 'section' ? value : updatedRow.section,
+        field === 'documentType' ? value : updatedRow.documentType,
+        field === 'documentNumber' ? value : updatedRow.documentNumber
+      );
+      setValidationErrors((prev) =>
+        prev.map((err) =>
+          err.id === id ? { ...err, error } : err
+        )
+      );
+    }
     setError('');
     setSuccess('');
   };
 
-  const addTableRow = (section) => async (e) => {
-    e.preventDefault();
-    const lastRow = propertyData[section][propertyData[section].length - 1];
-    const hasData = Object.values(lastRow).some((val, idx) => idx !== 0 && val && val !== 'Select Land Type' && val !== 'Select Type');
-    if (!hasData || !lastRow.fileUuid) {
-      setError(`Please fill at least one field, select a valid type, and upload a file for ${section} before adding.`);
+  const addTableRow = async () => {
+    const lastRow = propertyData[propertyData.length - 1];
+    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.fileUuid) {
+      setError('Please select a document type, enter a document number, and upload a file before adding.');
+      return;
+    }
+
+    const error = validateInput(lastRow.section, lastRow.documentType, lastRow.documentNumber);
+    if (error) {
+      setValidationErrors((prev) =>
+        prev.map((err) =>
+          err.id === lastRow.id ? { ...err, error } : err
+        )
+      );
+      setError(error);
       return;
     }
 
     try {
+      console.log('Sending POST request to /property/document with payload:', {
+        type: lastRow.documentType,
+        number: lastRow.documentNumber,
+        remark: lastRow.remark || '',
+        fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
+        section: lastRow.section,
+      });
       const response = await axios.post(
         `${process.env.REACT_APP_API_URL}/property/document`,
         {
-          ...(section === 'PropertyDetails' ? {
-            propertyNumber: lastRow.propertyNumber,
-            areaAddress: lastRow.areaAddress,
-            pincode: lastRow.pincode,
-            landType: lastRow.landType,
-          } : section === 'VehicleDetails' ? {
-            vehicleNumber: lastRow.vehicleNumber,
-            vehicleModel: lastRow.vehicleModel,
-            vehicleInsurance: lastRow.vehicleInsurance,
-          } : {
-            type: lastRow.type,
-            documentNumber: lastRow.documentNumber,
-            details: lastRow.details,
-          }),
-          fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
+          type: lastRow.documentType,
+          number: lastRow.documentNumber,
+          remark: lastRow.remark || '',
+          fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
+          section: lastRow.section,
         },
         {
           headers: {
@@ -209,515 +293,218 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
           },
         }
       );
+      console.log('POST response:', JSON.stringify(response.data, null, 2));
 
       const newDocument = response.data.document;
-      setAddedDocuments((prev) => ({
+      if (!newDocument.number) {
+        console.warn(`Missing 'number' in POST response:`, newDocument);
+      }
+      setAddedDocuments((prev) => [
         ...prev,
-        [section]: [
-          ...prev[section],
-          {
-            id: newDocument._id,
-            ...(section === 'PropertyDetails' ? {
-              propertyNumber: lastRow.propertyNumber,
-              areaAddress: lastRow.areaAddress,
-              pincode: lastRow.pincode,
-              landType: lastRow.landType,
-            } : section === 'VehicleDetails' ? {
-              vehicleNumber: lastRow.vehicleNumber,
-              vehicleModel: lastRow.vehicleModel,
-              vehicleInsurance: lastRow.vehicleInsurance,
-            } : {
-              type: lastRow.type,
-              documentNumber: lastRow.documentNumber,
-              details: lastRow.details,
-            }),
-            fileUrl: newDocument.fileUrl,
-          },
-        ],
-      }));
-      setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: true }));
-      setPropertyData((prev) => ({
-        ...prev,
-        [section]: [
-          ...prev[section],
-          {
-            id: prev[section].length + 1,
-            ...(section === 'PropertyDetails'
-              ? { propertyNumber: '', areaAddress: '', pincode: '', landType: 'Select Land Type', file: null, fileUuid: null }
-              : section === 'VehicleDetails'
-              ? { vehicleNumber: '', vehicleModel: '', vehicleInsurance: '', file: null, fileUuid: null }
-              : { type: 'Select Type', documentNumber: '', details: '', file: null, fileUuid: null }),
-          },
-        ],
-      }));
-      setSuccess(`${section} document added successfully`);
+        {
+          id: newDocument._id,
+          section: newDocument.section || lastRow.section,
+          documentType: newDocument.type || 'Select Document',
+          documentNumber: newDocument.number || '',
+          remark: newDocument.remark || '',
+          fileUrl: newDocument.fileUrl || null,
+        },
+      ]);
+      setPropertyData((prev) => [
+        {
+          id: Math.max(...prev.map(row => row.id)) + 1,
+          section: 'Property Details',
+          documentType: 'Select Document',
+          documentNumber: '',
+          remark: '',
+          file: null,
+          fileUuid: null,
+        },
+      ]);
+      setValidationErrors((prev) => [
+        { id: Math.max(...prev.map(err => err.id)) + 1, error: '' },
+      ]);
+      setSuccess('Document added successfully');
     } catch (error) {
-      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()} document`);
-      console.error(`Add ${section} document error:`, error);
+      console.error('Add document error:', {
+        message: error.message,
+        response: error.response ? {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers,
+        } : 'No response received',
+      });
+      setError(error.response?.data?.message || 'Failed to save document. Please check the console for details.');
     }
   };
 
-  const deleteTableRow = (section, id) => async () => {
+  const deleteTableRow = (id) => async () => {
     try {
       await axios.delete(`${process.env.REACT_APP_API_URL}/property/document/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setAddedDocuments((prev) => ({
-        ...prev,
-        [section]: prev[section].filter((item) => item.id !== id),
-      }));
-      if (addedDocuments[section].length <= 1) {
-        setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: false }));
-      }
-      setSuccess(`${section} document deleted successfully`);
+      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
+      setSuccess('Document deleted successfully');
     } catch (error) {
-      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()} document`);
-      console.error(`Delete ${section} document error:`, error);
+      console.error('Delete document error:', error);
+      setError(error.response?.data?.message || 'Failed to delete document');
     }
   };
 
-  const handleUpdateProperty = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/property`,
-        { propertyData: addedDocuments },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      setSuccess('Property data updated successfully');
-      setAddedDocuments({
-        PropertyDetails: response.data.propertyData.PropertyDetails?.map(item => ({
-          id: item._id,
-          propertyNumber: item.propertyNumber,
-          areaAddress: item.areaAddress,
-          pincode: item.pincode,
-          landType: item.landType,
-          fileUrl: item.fileUrl,
-        })) || [],
-        VehicleDetails: response.data.propertyData.VehicleDetails?.map(item => ({
-          id: item._id,
-          vehicleNumber: item.vehicleNumber,
-          vehicleModel: item.vehicleModel,
-          vehicleInsurance: item.vehicleInsurance,
-          fileUrl: item.fileUrl,
-        })) || [],
-        TransactionDetails: response.data.propertyData.TransactionDetails?.map(item => ({
-          id: item._id,
-          type: item.type,
-          documentNumber: item.documentNumber,
-          details: item.details,
-          fileUrl: item.fileUrl,
-        })) || [],
-      });
-      setShowAddedDocuments({
-        propertyDetails: response.data.propertyData.PropertyDetails?.length > 0,
-        vehicleDetails: response.data.propertyData.VehicleDetails?.length > 0,
-        transactionDetails: response.data.propertyData.TransactionDetails?.length > 0,
-      });
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update property data');
-      console.error('Update property error:', error);
-    }
-  };
+  const renderTable = () => (
+    <div className="table-container mb-6">
+      <h4>Property & Asset Information</h4>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border p-2">Document Type</th>
+            <th className="border p-2">Document Number</th>
+            <th className="border p-2">Remark (Optional)</th>
+            <th className="border p-2">Upload File</th>
+            <th className="border p-2">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {propertyData.map((item, index) => (
+            <tr key={item.id} className="table-row">
+              <td className="border p-2">
+                <select
+                  value={item.documentType}
+                  onChange={(e) => {
+                    handleTableChange(item.id, 'documentType', e.target.value);
+                    const error = validateInput(item.section, e.target.value, item.documentNumber);
+                    setValidationErrors((prev) =>
+                      prev.map((err) =>
+                        err.id === item.id ? { ...err, error } : err
+                      )
+                    );
+                  }}
+                  className="w-full p-1"
+                  disabled={item.fileUuid}
+                >
+                  {allDocumentTypes.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td className="border p-2">
+                <input
+                  type="text"
+                  value={item.documentNumber}
+                  onChange={(e) => handleTableChange(item.id, 'documentNumber', e.target.value)}
+                  className={`w-full p-1 ${validationErrors.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
+                  disabled={item.fileUuid}
+                />
+                {validationErrors.find((err) => err.id === item.id)?.error && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {validationErrors.find((err) => err.id === item.id).error}
+                  </p>
+                )}
+              </td>
+              <td className="border p-2">
+                <input
+                  type="text"
+                  value={item.remark}
+                  onChange={(e) => handleTableChange(item.id, 'remark', e.target.value)}
+                  className="w-full p-1"
+                  disabled={item.fileUuid}
+                />
+              </td>
+              <td className="border p-2">
+                {uploadcareLoaded ? (
+                  <div>
+                    {item.fileUuid ? (
+                      <a href={`https://ucarecdn.com/${item.fileUuid}/`} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                        View File
+                      </a>
+                    ) : (
+                      <input
+                        type="hidden"
+                        data-uploadcare-id={`${item.section}_${item.id}`}
+                        data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
+                        data-images-only="false"
+                        data-max-size="104857600"
+                        data-file-types=".pdf,.jpg,.png"
+                        className="w-full"
+                      />
+                    )}
+                    {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                  </div>
+                ) : (
+                  <p className="text-gray-500">Loading uploader...</p>
+                )}
+              </td>
+              <td className="border p-2">
+                {index === propertyData.length - 1 && (
+                  <button
+                    onClick={addTableRow}
+                    className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
+                  >
+                    Add
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {addedDocuments.length > 0 && (
+        <div className="table-container mt-6">
+          <h4>Added Documents</h4>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-2">Document Type</th>
+                <th className="border p-2">Document Number</th>
+                <th className="border p-2">Remark</th>
+                <th className="border p-2">View File</th>
+                <th className="border p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {addedDocuments.map((item) => (
+                <tr key={item.id} className="table-row">
+                  <td className="border p-2">{item.documentType}</td>
+                  <td className="border p-2">{item.documentNumber || 'N/A'}</td>
+                  <td className="border p-2">{item.remark || 'N/A'}</td>
+                  <td className="border p-2">
+                    {item.fileUrl ? (
+                      <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                        View File
+                      </a>
+                    ) : (
+                      'No file uploaded'
+                    )}
+                  </td>
+                  <td className="border p-2">
+                    <button
+                      onClick={deleteTableRow(item.id)}
+                      className="text-red-500"
+                    >
+                      <FaTimes />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <form className="section property-section" onSubmit={handleUpdateProperty}>
+    <div className="section property-section">
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Property & Asset Information
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
       </h3>
       <div className={`section-content ${expanded ? 'expanded' : 'collapsed'} overflow-y-auto max-h-[500px]`}>
-        {/* Property Details Table */}
-        <div className="table-container mb-6">
-          <h4>Property Details</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Property Number</th>
-                <th className="border p-2">Area/Address</th>
-                <th className="border p-2">Pincode</th>
-                <th className="border p-2">Land Type</th>
-                <th className="border p-2">Upload 7/12 or Document</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {propertyData.PropertyDetails.map((item) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.propertyNumber}
-                      onChange={(e) => handleTableChange('PropertyDetails', item.id, 'propertyNumber', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.areaAddress}
-                      onChange={(e) => handleTableChange('PropertyDetails', item.id, 'areaAddress', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.pincode}
-                      onChange={(e) => handleTableChange('PropertyDetails', item.id, 'pincode', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <select
-                      value={item.landType}
-                      onChange={(e) => handleTableChange('PropertyDetails', item.id, 'landType', e.target.value)}
-                      className="w-full p-1"
-                    >
-                      {landTypeOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="border p-2">
-                    {uploadcareLoaded ? (
-                      <div>
-                        <input
-                          type="hidden"
-                          data-uploadcare-id={`PropertyDetails_${item.id}`}
-                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
-                          data-images-only="false"
-                          data-max-size="104857600"
-                          data-file-types=".pdf,.jpg,.png"
-                          className="w-full"
-                        />
-                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">Loading uploader...</p>
-                    )}
-                  </td>
-                  <td className="border p-2">
-                    <button
-                      onClick={addTableRow('PropertyDetails')}
-                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                    >
-                      Add
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.propertyDetails && (
-          <div className="table-container mt-6">
-            <h4>Added Property Details</h4>
-            {addedDocuments.PropertyDetails.length === 0 ? (
-              <p className="text-gray-500">No property details added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Property Number</th>
-                    <th className="border p-2">Area/Address</th>
-                    <th className="border p-2">Pincode</th>
-                    <th className="border p-2">Land Type</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {addedDocuments.PropertyDetails.map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.propertyNumber || 'N/A'}</td>
-                      <td className="border p-2">{item.areaAddress || 'N/A'}</td>
-                      <td className="border p-2">{item.pincode || 'N/A'}</td>
-                      <td className="border p-2">{item.landType !== 'Select Land Type' ? item.landType : 'N/A'}</td>
-                      <td className="border p-2">
-                        {item.fileUrl ? (
-                          <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
-                            View File
-                          </a>
-                        ) : (
-                          'No file uploaded'
-                        )}
-                      </td>
-                      <td className="border p-2">
-                        <button
-                          onClick={deleteTableRow('PropertyDetails', item.id)}
-                          className="text-red-500"
-                        >
-                          <FaTimes />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* Vehicle Details Table */}
-        <div className="table-container mb-6">
-          <h4>Vehicle Details</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Vehicle Number</th>
-                <th className="border p-2">Vehicle Model</th>
-                <th className="border p-2">Vehicle Insurance</th>
-                <th className="border p-2">Upload Document</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {propertyData.VehicleDetails.map((item) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.vehicleNumber}
-                      onChange={(e) => handleTableChange('VehicleDetails', item.id, 'vehicleNumber', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.vehicleModel}
-                      onChange={(e) => handleTableChange('VehicleDetails', item.id, 'vehicleModel', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.vehicleInsurance}
-                      onChange={(e) => handleTableChange('VehicleDetails', item.id, 'vehicleInsurance', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    {uploadcareLoaded ? (
-                      <div>
-                        <input
-                          type="hidden"
-                          data-uploadcare-id={`VehicleDetails_${item.id}`}
-                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
-                          data-images-only="false"
-                          data-max-size="104857600"
-                          data-file-types=".pdf,.jpg,.png"
-                          className="w-full"
-                        />
-                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">Loading uploader...</p>
-                    )}
-                  </td>
-                  <td className="border p-2">
-                    <button
-                      onClick={addTableRow('VehicleDetails')}
-                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                    >
-                      Add
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.vehicleDetails && (
-          <div className="table-container mt-6">
-            <h4>Added Vehicle Details</h4>
-            {addedDocuments.VehicleDetails.length === 0 ? (
-              <p className="text-gray-500">No vehicle details added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Vehicle Number</th>
-                    <th className="border p-2">Vehicle Model</th>
-                    <th className="border p-2">Vehicle Insurance</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {addedDocuments.VehicleDetails.map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.vehicleNumber || 'N/A'}</td>
-                      <td className="border p-2">{item.vehicleModel || 'N/A'}</td>
-                      <td className="border p-2">{item.vehicleInsurance || 'N/A'}</td>
-                      <td className="border p-2">
-                        {item.fileUrl ? (
-                          <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
-                            View File
-                          </a>
-                        ) : (
-                          'No file uploaded'
-                        )}
-                      </td>
-                      <td className="border p-2">
-                        <button
-                          onClick={deleteTableRow('VehicleDetails', item.id)}
-                          className="text-red-500"
-                        >
-                          <FaTimes />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* Transaction Details Table */}
-        <div className="table-container mb-6">
-          <h4>Sale, Purchase, Agreements, Rent Details</h4>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Type</th>
-                <th className="border p-2">Document Number</th>
-                <th className="border p-2">Details</th>
-                <th className="border p-2">Upload Document</th>
-                <th className="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {propertyData.TransactionDetails.map((item) => (
-                <tr key={item.id} className="table-row">
-                  <td className="border p-2">
-                    <select
-                      value={item.type}
-                      onChange={(e) => handleTableChange('TransactionDetails', item.id, 'type', e.target.value)}
-                      className="w-full p-1"
-                    >
-                      {transactionTypeOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.documentNumber}
-                      onChange={(e) => handleTableChange('TransactionDetails', item.id, 'documentNumber', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={item.details}
-                      onChange={(e) => handleTableChange('TransactionDetails', item.id, 'details', e.target.value)}
-                      className="w-full p-1"
-                    />
-                  </td>
-                  <td className="border p-2">
-                    {uploadcareLoaded ? (
-                      <div>
-                        <input
-                          type="hidden"
-                          data-uploadcare-id={`TransactionDetails_${item.id}`}
-                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
-                          data-images-only="false"
-                          data-max-size="104857600"
-                          data-file-types=".pdf,.jpg,.png"
-                          className="w-full"
-                        />
-                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">Loading uploader...</p>
-                    )}
-                  </td>
-                  <td className="border p-2">
-                    <button
-                      onClick={addTableRow('TransactionDetails')}
-                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                    >
-                      Add
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {showAddedDocuments.transactionDetails && (
-          <div className="table-container mt-6">
-            <h4>Added Sale, Purchase, Agreements, Rent Details</h4>
-            {addedDocuments.TransactionDetails.length === 0 ? (
-              <p className="text-gray-500">No transaction details added yet.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-2">Type</th>
-                    <th className="border p-2">Document Number</th>
-                    <th className="border p-2">Details</th>
-                    <th className="border p-2">View File</th>
-                    <th className="border p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {addedDocuments.TransactionDetails.map((item) => (
-                    <tr key={item.id} className="table-row">
-                      <td className="border p-2">{item.type !== 'Select Type' ? item.type : 'N/A'}</td>
-                      <td className="border p-2">{item.documentNumber || 'N/A'}</td>
-                      <td className="border p-2">{item.details || 'N/A'}</td>
-                      <td className="border p-2">
-                        {item.fileUrl ? (
-                          <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
-                            View File
-                          </a>
-                        ) : (
-                          'No file uploaded'
-                        )}
-                      </td>
-                      <td className="border p-2">
-                        <button
-                          onClick={deleteTableRow('TransactionDetails', item.id)}
-                          className="text-red-500"
-                        >
-                          <FaTimes />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-        >
-          Update Property Details
-        </button>
+        {renderTable()}
       </div>
-    </form>
+    </div>
   );
 };
 

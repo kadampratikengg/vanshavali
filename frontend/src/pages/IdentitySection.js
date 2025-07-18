@@ -358,7 +358,7 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
                           data-uploadcare-id={item.id}
                           data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
                           data-images-only="false"
-                          data-max-size="104857600"
+                          data-max-size="1024"
                           data-file-types=".pdf,.jpg,.png"
                           className="w-full"
                         />

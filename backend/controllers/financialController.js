@@ -2,28 +2,27 @@ const Financial = require('../models/Financial');
 
 exports.createFinancial = async (req, res) => {
   try {
-    const { financialData } = req.body;
-    const parsedFinancialData = typeof financialData === 'string' ? JSON.parse(financialData) : financialData;
-    const fileUrls = req.uploadcareUuids || [];
-
-    const updatedFinancialData = {
-      Banking: parsedFinancialData.Banking.map((item, index) => ({
-        ...item,
-        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : null,
-      })),
-      Investments: parsedFinancialData.Investments.map((item, index) => ({
-        ...item,
-        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : null,
-      })),
+    const { type, bankName, accountNumber, ifsc, name, detail, fileUrl } = req.body;
+    if (!type || type === 'Select Type' || !fileUrl) {
+      return res.status(400).json({ message: 'Type and file URL are required' });
+    }
+    let financial = await Financial.findOne({ userId: req.user.id });
+    if (!financial) {
+      financial = new Financial({
+        userId: req.user.id,
+        financialData: { Banking: [], Investments: [] },
+      });
+    }
+    const section = bankName ? 'Banking' : 'Investments';
+    const newDocument = {
+      _id: new mongoose.Types.ObjectId(),
+      type,
+      ...(section === 'Banking' ? { bankName, accountNumber, ifsc } : { name, detail }),
+      fileUrl,
     };
-
-    const financial = new Financial({
-      userId: req.user.id,
-      financialData: updatedFinancialData,
-    });
-
+    financial.financialData[section].push(newDocument);
     await financial.save();
-    res.status(201).json({ message: 'Financial data saved', financial });
+    res.status(201).json({ message: 'Document added', document: newDocument });
   } catch (error) {
     res.status(500).json({ message: 'Failed to save financial data', error: error.message });
   }
@@ -50,7 +49,7 @@ exports.updateFinancial = async (req, res) => {
     const updatedFinancialData = {
       Banking: parsedFinancialData.Banking.map((item, index) => ({
         ...item,
-        fileUrlGrow: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : item.fileUrl,
+        fileUrl: fileUrls[index] ? `https://ucarecdn.com/${fileUrls[index]}/` : item.fileUrl,
       })),
       Investments: parsedFinancialData.Investments.map((item, index) => ({
         ...item,
