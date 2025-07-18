@@ -4,14 +4,17 @@ import axios from 'axios';
 
 const FinancialSection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
-  const [financialData, setFinancialData] = useState({
-    Banking: [{ id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }],
-    Investments: [{ id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }],
-  });
-  const [validationErrors, setValidationErrors] = useState({
-    Banking: [{ id: 1, error: '' }],
-    Investments: [{ id: 1, error: '' }],
-  });
+  const [financialData, setFinancialData] = useState([{
+    id: 1,
+    section: 'Banking',
+    documentType: 'Select Document',
+    documentNumber: '',
+    remark: '',
+    file: null,
+    fileUuid: null,
+  }]);
+  const [addedDocuments, setAddedDocuments] = useState([]);
+  const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
 
@@ -19,6 +22,10 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
     Banking: ['Select Document', 'Bank Statement', 'Passbook', 'Fixed Deposit Certificate', 'Other'],
     Investments: ['Select Document', 'Mutual Fund Statement', 'Demat Account Statement', 'PF Statement', 'Other'],
   };
+
+  const allDocumentTypes = [
+    ...new Set(Object.values(documentOptions).flat()),
+  ].sort();
 
   const validateInput = (section, documentType, documentNumber) => {
     if (documentType === 'Select Document') {
@@ -70,32 +77,42 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
       return;
     }
 
-    Object.keys(financialData).forEach((section) => {
-      financialData[section].forEach((item) => {
-        if (!widgetRefs.current[`${section}_${item.id}`]) {
+    const initializeWidgets = () => {
+      financialData.forEach((item) => {
+        if (!widgetRefs.current[`${item.section}_${item.id}`]) {
+          const selector = `[data-uploadcare-id="${item.section}_${item.id}"]`;
+          const element = document.querySelector(selector);
+          if (!element) {
+            console.warn(`No DOM element found for selector ${selector}. Retrying...`);
+            return;
+          }
           try {
-            console.log(`Initializing Uploadcare widget for ${section} ID: ${item.id}`);
-            const widget = window.uploadcare.Widget(`[data-uploadcare-id="${section}_${item.id}"]`);
+            console.log(`Initializing Uploadcare widget for ${item.section} ID: ${item.id}`);
+            const widget = window.uploadcare.Widget(selector);
             widget.onUploadComplete((file) => {
-              console.log(`File uploaded for ${section} ID ${item.id}:`, file);
-              setFinancialData((prev) => ({
-                ...prev,
-                [section]: prev[section].map((row) =>
+              console.log(`File uploaded for ${item.section} ID ${item.id}:`, file);
+              setFinancialData((prev) =>
+                prev.map((row) =>
                   row.id === item.id ? { ...row, file, fileUuid: file.uuid } : row
-                ),
-              }));
+                )
+              );
             });
-            widgetRefs.current[`${section}_${item.id}`] = widget;
-            console.log(`Uploadcare widget initialized for ${section} ID: ${item.id}`);
+            widgetRefs.current[`${item.section}_${item.id}`] = widget;
+            console.log(`Uploadcare widget initialized for ${item.section} ID: ${item.id}`);
           } catch (error) {
+            console.error(`Uploadcare widget error for ${item.section} ID: ${item.id}`, error);
             setError('Failed to initialize Uploadcare widget');
-            console.error(`Uploadcare widget error for ${section} ID:`, item.id, error);
           }
         }
       });
-    });
+    };
+
+    const timer = setTimeout(() => {
+      initializeWidgets();
+    }, 100);
 
     return () => {
+      clearTimeout(timer);
       Object.values(widgetRefs.current).forEach((widget) => {
         try {
           console.log('Cleaning up Uploadcare widget');
@@ -119,54 +136,87 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/financial`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('Backend response:', response.data);
+        console.log('Backend response (raw):', JSON.stringify(response.data, null, 2));
         const { financialData: fetchedData } = response.data;
-        const newFinancialData = {
-          Banking: [
-            ...(fetchedData?.Banking?.map(item => ({
-              id: item._id,
-              documentType: item.type || 'Select Document',
-              documentNumber: item.accountNumber || '',
-              file: null,
-              fileUuid: item.fileUrl ? item.fileUrl.replace('https://ucarecdn.com/', '').replace('/', '') : null,
-            })) || []),
-            { id: Math.max(...(fetchedData?.Banking?.map(item => item._id) || [0])) + 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null },
-          ],
-          Investments: [
-            ...(fetchedData?.Investments?.map(item => ({
-              id: item._id,
-              documentType: item.type || 'Select Document',
-              documentNumber: item.name || item.detail || '',
-              file: null,
-              fileUuid: item.fileUrl ? item.fileUrl.replace('https://ucarecdn.com/', '').replace('/', '') : null,
-            })) || []),
-            { id: Math.max(...(fetchedData?.Investments?.map(item => item._id) || [0])) + 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null },
-          ],
-        };
+
+        if (!fetchedData || typeof fetchedData !== 'object') {
+          console.warn('Invalid or missing financialData in response:', fetchedData);
+          setError('Invalid data received from server');
+          return;
+        }
+
+        const newFinancialData = [{
+          id: 1,
+          section: 'Banking',
+          documentType: 'Select Document',
+          documentNumber: '',
+          remark: '',
+          file: null,
+          fileUuid: null,
+        }];
+        const newAddedDocuments = [
+          ...(Array.isArray(fetchedData.Banking)
+            ? fetchedData.Banking.map(item => ({
+                id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
+                section: 'Banking',
+                documentType: item.type || 'Select Document',
+                documentNumber: item.accountNumber || '',
+                remark: item.remark || '',
+                fileUrl: item.fileUrl || null,
+              }))
+            : []),
+          ...(Array.isArray(fetchedData.Investments)
+            ? fetchedData.Investments.map(item => ({
+                id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
+                section: 'Investments',
+                documentType: item.type || 'Select Document',
+                documentNumber: item.name || '',
+                remark: item.remark || '',
+                fileUrl: item.fileUrl || null,
+              }))
+            : []),
+        ];
         setFinancialData(newFinancialData);
-        console.log('Transformed financialData:', newFinancialData);
-        setValidationErrors({
-          Banking: newFinancialData.Banking.map(item => ({ id: item.id, error: '' })),
-          Investments: newFinancialData.Investments.map(item => ({ id: item.id, error: '' })),
-        });
-        console.log('validationErrors:', {
-          Banking: newFinancialData.Banking.map(item => ({ id: item.id, error: '' })),
-          Investments: newFinancialData.Investments.map(item => ({ id: item.id, error: '' })),
-        });
+        setAddedDocuments(newAddedDocuments);
+        console.log('Transformed financialData:', JSON.stringify(newFinancialData, null, 2));
+        console.log('Transformed addedDocuments:', JSON.stringify(newAddedDocuments, null, 2));
+        console.log('Checking documentNumber and remark in addedDocuments:', 
+          newAddedDocuments.map(doc => ({
+            id: doc.id,
+            documentNumber: doc.documentNumber,
+            remark: doc.remark,
+          }))
+        );
+        setValidationErrors(newFinancialData.map(item => ({ id: item.id, error: '' })));
+        console.log('validationErrors:', JSON.stringify(
+          newFinancialData.map(item => ({ id: item.id, error: '' })),
+          null,
+          2
+        ));
         setExpanded(true);
       } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Fetch error:', {
+          message: error.message,
+          response: error.response ? {
+            status: error.response.status,
+            data: error.response.data,
+            headers: error.response.headers,
+          } : 'No response received',
+        });
         if (error.response?.status === 404) {
           console.warn('Financial endpoint not found, using default data');
-          const defaultData = {
-            Banking: [{ id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }],
-            Investments: [{ id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }],
-          };
+          const defaultData = [{
+            id: 1,
+            section: 'Banking',
+            documentType: 'Select Document',
+            documentNumber: '',
+            remark: '',
+            file: null,
+            fileUuid: null,
+          }];
           setFinancialData(defaultData);
-          setValidationErrors({
-            Banking: [{ id: 1, error: '' }],
-            Investments: [{ id: 1, error: '' }],
-          });
+          setAddedDocuments([]);
+          setValidationErrors([{ id: 1, error: '' }]);
           setExpanded(true);
         } else {
           setError(error.response?.data?.message || 'Failed to fetch financial data');
@@ -176,53 +226,63 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
     fetchFinancialData();
   }, [setError, token]);
 
-  const handleFinancialTableChange = (section, id, field, value) => {
-    setFinancialData((prev) => ({
-      ...prev,
-      [section]: prev[section].map((item) =>
+  const handleTableChange = (id, field, value) => {
+    setFinancialData((prev) =>
+      prev.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
-      ),
-    }));
-    if (field === 'documentNumber' || field === 'documentType') {
-      const updatedRow = financialData[section].find((item) => item.id === id);
-      const error = validateInput(section, field === 'documentType' ? value : updatedRow.documentType, updatedRow.documentNumber);
-      setValidationErrors((prev) => ({
-        ...prev,
-        [section]: prev[section].map((err) =>
+      )
+    );
+    if (field === 'documentNumber' || field === 'documentType' || field === 'section') {
+      const updatedRow = financialData.find((item) => item.id === id);
+      const error = validateInput(
+        field === 'section' ? value : updatedRow.section,
+        field === 'documentType' ? value : updatedRow.documentType,
+        field === 'documentNumber' ? value : updatedRow.documentNumber
+      );
+      setValidationErrors((prev) =>
+        prev.map((err) =>
           err.id === id ? { ...err, error } : err
-        ),
-      }));
+        )
+      );
     }
     setError('');
     setSuccess('');
   };
 
-  const addFinancialRow = (section) => async () => {
-    const lastRow = financialData[section][financialData[section].length - 1];
+  const addTableRow = async () => {
+    const lastRow = financialData[financialData.length - 1];
     if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.fileUuid) {
-      setError(`Please select a document type, enter a document number, and upload a file for ${section} before adding.`);
+      setError('Please select a document type, enter a document number, and upload a file before adding.');
       return;
     }
 
-    const error = validateInput(section, lastRow.documentType, lastRow.documentNumber);
+    const error = validateInput(lastRow.section, lastRow.documentType, lastRow.documentNumber);
     if (error) {
-      setValidationErrors((prev) => ({
-        ...prev,
-        [section]: prev[section].map((err) =>
+      setValidationErrors((prev) =>
+        prev.map((err) =>
           err.id === lastRow.id ? { ...err, error } : err
-        ),
-      }));
+        )
+      );
       setError(error);
       return;
     }
 
     try {
+      console.log('Sending POST request to /financial/document with payload:', {
+        type: lastRow.documentType,
+        number: lastRow.documentNumber,
+        remark: lastRow.remark || '',
+        fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
+        section: lastRow.section,
+      });
       const response = await axios.post(
         `${process.env.REACT_APP_API_URL}/financial/document`,
         {
           type: lastRow.documentType,
-          ...(section === 'Banking' ? { accountNumber: lastRow.documentNumber } : { name: lastRow.documentNumber }),
+          number: lastRow.documentNumber,
+          remark: lastRow.remark || '',
           fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
+          section: lastRow.section,
         },
         {
           headers: {
@@ -231,90 +291,103 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
           },
         }
       );
-      console.log('POST response:', response.data);
+      console.log('POST response:', JSON.stringify(response.data, null, 2));
 
       const newDocument = response.data.document;
-      setFinancialData((prev) => {
-        const newData = {
-          ...prev,
-          [section]: [
-            ...prev[section].filter(row => row.id !== lastRow.id),
-            {
-              id: newDocument._id,
-              documentType: newDocument.type,
-              documentNumber: section === 'Banking' ? newDocument.accountNumber : newDocument.name,
-              file: null,
-              fileUuid: newDocument.fileUrl ? newDocument.fileUrl.replace('https://ucarecdn.com/', '').replace('/', '') : null,
-            },
-            { id: Math.max(...prev[section].map(row => row.id)) + 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null },
-          ],
-        };
-        console.log('Updated financialData:', newData);
-        return newData;
-      });
-      setValidationErrors((prev) => ({
+      if (!newDocument.number) {
+        console.warn(`Missing 'number' in POST response:`, newDocument);
+      }
+      setAddedDocuments((prev) => [
         ...prev,
-        [section]: [
-          ...prev[section].filter(err => err.id !== lastRow.id),
-          { id: Math.max(...prev[section].map(row => row.id)) + 1, error: '' },
-        ],
-      }));
-      setSuccess(`${section} document added successfully`);
+        {
+          id: newDocument._id,
+          section: newDocument.section || lastRow.section,
+          documentType: newDocument.type || 'Select Document',
+          documentNumber: newDocument.number || '',
+          remark: newDocument.remark || '',
+          fileUrl: newDocument.fileUrl || null,
+        },
+      ]);
+      setFinancialData((prev) => [
+        {
+          id: Math.max(...prev.map(row => Number(row.id)), 0) + 1,
+          section: 'Banking',
+          documentType: 'Select Document',
+          documentNumber: '',
+          remark: '',
+          file: null,
+          fileUuid: null,
+        },
+      ]);
+      setValidationErrors((prev) => [
+        { id: Math.max(...prev.map(err => Number(err.id)), 0) + 1, error: '' },
+      ]);
+      setSuccess('Document added successfully');
     } catch (error) {
-      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()} document`);
-      console.error(`Add ${section} document error:`, error);
+      console.error('Add document error:', {
+        message: error.message,
+        response: error.response ? {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers,
+        } : 'No response received',
+      });
+      setError(error.response?.data?.message || 'Failed to save document. Please check the console for details.');
     }
   };
 
-  const deleteFinancialRow = (section, id) => async () => {
+  const deleteTableRow = (id) => async () => {
     try {
       await axios.delete(`${process.env.REACT_APP_API_URL}/financial/document/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setFinancialData((prev) => ({
-        ...prev,
-        [section]: prev[section].filter((item) => item.id !== id),
-      }));
-      if (financialData[section].length <= 1) {
-        setFinancialData((prev) => ({
-          ...prev,
-          [section]: [{ id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }],
-        }));
-        setValidationErrors((prev) => ({
-          ...prev,
-          [section]: [{ id: 1, error: '' }],
-        }));
-      }
-      setSuccess(`${section} document deleted successfully`);
+      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
+      setSuccess('Document deleted successfully');
     } catch (error) {
-      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()} document`);
-      console.error(`Delete ${section} document error:`, error);
+      console.error('Delete document error:', {
+        message: error.message,
+        response: error.response ? {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers,
+        } : 'No response received',
+      });
+      setError(error.response?.data?.message || 'Failed to delete document');
     }
   };
 
-  const renderTable = (section, title) => (
+  const renderTable = () => (
     <div className="table-container mb-6">
-      <h4>{title}</h4>
+      <h4>Financial Records</h4>
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-2">Document Type</th>
             <th className="border p-2">Document Number</th>
+            <th className="border p-2">Remark (Optional)</th>
             <th className="border p-2">Upload File</th>
             <th className="border p-2">Action</th>
           </tr>
         </thead>
         <tbody>
-          {financialData[section].map((item, index) => (
+          {financialData.map((item, index) => (
             <tr key={item.id} className="table-row">
               <td className="border p-2">
                 <select
                   value={item.documentType}
-                  onChange={(e) => handleFinancialTableChange(section, item.id, 'documentType', e.target.value)}
+                  onChange={(e) => {
+                    handleTableChange(item.id, 'documentType', e.target.value);
+                    const error = validateInput(item.section, e.target.value, item.documentNumber);
+                    setValidationErrors((prev) =>
+                      prev.map((err) =>
+                        err.id === item.id ? { ...err, error } : err
+                      )
+                    );
+                  }}
                   className="w-full p-1"
                   disabled={item.fileUuid}
                 >
-                  {documentOptions[section].map((option) => (
+                  {allDocumentTypes.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
@@ -325,15 +398,24 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                 <input
                   type="text"
                   value={item.documentNumber}
-                  onChange={(e) => handleFinancialTableChange(section, item.id, 'documentNumber', e.target.value)}
-                  className={`w-full p-1 ${validationErrors[section].find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
+                  onChange={(e) => handleTableChange(item.id, 'documentNumber', e.target.value)}
+                  className={`w-full p-1 ${validationErrors.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
                   disabled={item.fileUuid}
                 />
-                {validationErrors[section].find((err) => err.id === item.id)?.error && (
+                {validationErrors.find((err) => err.id === item.id)?.error && (
                   <p className="text-red-500 text-sm mt-1">
-                    {validationErrors[section].find((err) => err.id === item.id).error}
+                    {validationErrors.find((err) => err.id === item.id).error}
                   </p>
                 )}
+              </td>
+              <td className="border p-2">
+                <input
+                  type="text"
+                  value={item.remark}
+                  onChange={(e) => handleTableChange(item.id, 'remark', e.target.value)}
+                  className="w-full p-1"
+                  disabled={item.fileUuid}
+                />
               </td>
               <td className="border p-2">
                 {uploadcareLoaded ? (
@@ -345,7 +427,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                     ) : (
                       <input
                         type="hidden"
-                        data-uploadcare-id={`${section}_${item.id}`}
+                        data-uploadcare-id={`${item.section}_${item.id}`}
                         data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
                         data-images-only="false"
                         data-max-size="104857600"
@@ -360,28 +442,61 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                 )}
               </td>
               <td className="border p-2">
-                {item.fileUuid ? (
+                {index === financialData.length - 1 && (
                   <button
-                    onClick={deleteFinancialRow(section, item.id)}
-                    className="text-red-500"
+                    onClick={addTableRow}
+                    className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
                   >
-                    <FaTimes />
+                    Add
                   </button>
-                ) : (
-                  index === financialData[section].length - 1 && (
-                    <button
-                      onClick={addFinancialRow(section)}
-                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
-                    >
-                      Add
-                    </button>
-                  )
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {addedDocuments.length > 0 && (
+        <div className="table-container mt-6">
+          <h4>Added Documents</h4>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-2">Document Type</th>
+                <th className="border p-2">Document Number</th>
+                <th className="border p-2">Remark</th>
+                <th className="border p-2">View File</th>
+                <th className="border p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {addedDocuments.map((item) => (
+                <tr key={item.id} className="table-row">
+                  <td className="border p-2">{item.documentType}</td>
+                  <td className="border p-2">{item.documentNumber || 'N/A'}</td>
+                  <td className="border p-2">{item.remark || 'N/A'}</td>
+                  <td className="border p-2">
+                    {item.fileUrl ? (
+                      <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                        View File
+                      </a>
+                    ) : (
+                      'No file uploaded'
+                    )}
+                  </td>
+                  <td className="border p-2">
+                    <button
+                      onClick={deleteTableRow(item.id)}
+                      className="text-red-500"
+                    >
+                      <FaTimes />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 
@@ -392,8 +507,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
       </h3>
       <div className={`section-content ${expanded ? 'expanded' : 'collapsed'} overflow-y-auto max-h-[500px]`}>
-        {renderTable('Banking', 'Banking')}
-        {renderTable('Investments', 'Investments')}
+        {renderTable()}
       </div>
     </div>
   );

@@ -6,19 +6,18 @@ const financialSchema = new mongoose.Schema({
     Banking: [
       {
         _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
-        type: { type: String, trim: true },
-        bankName: { type: String, trim: true },
         accountNumber: { type: String, trim: true },
-        ifsc: { type: String, trim: true },
+        type: { type: String, trim: true },
+        remark: { type: String, trim: true },
         fileUrl: { type: String },
       },
     ],
     Investments: [
       {
         _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
-        type: { type: String, trim: true },
         name: { type: String, trim: true },
-        detail: { type: String, trim: true },
+        type: { type: String, trim: true },
+        remark: { type: String, trim: true },
         fileUrl: { type: String },
       },
     ],
