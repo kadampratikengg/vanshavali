@@ -5,8 +5,8 @@ import axios from 'axios';
 const FinancialSection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
   const [financialData, setFinancialData] = useState({
-    Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null }],
-    Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', file: null, fileUuid: null }],
+    Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', fileUuid: null }],
+    Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', fileUuid: null }],
   });
   const [showAddedDocuments, setShowAddedDocuments] = useState({
     banking: false,
@@ -114,8 +114,8 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
         });
         const { financialData: fetchedData } = response.data;
         setFinancialData(fetchedData || {
-          Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null }],
-          Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', file: null, fileUuid: null }],
+          Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', fileUuid: null }],
+          Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', fileUuid: null }],
         });
         setAddedDocuments({
           Banking: fetchedData?.Banking?.map(item => ({
@@ -142,8 +142,8 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
         if (error.response?.status === 404) {
           console.warn('Financial endpoint not found, using default data');
           setFinancialData({
-            Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null }],
-            Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', file: null, fileUuid: null }],
+            Banking: [{ id: 1, type: 'Select Type', bankName: '', accountNumber: '', ifsc: '', fileUuid: null }],
+            Investments: [{ id: 1, type: 'Select Type', name: '', detail: '', fileUuid: null }],
           });
           setAddedDocuments({
             Banking: [],
@@ -172,8 +172,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
     setSuccess('');
   };
 
-  const addFinancialRow = (section) => async (e) => {
-    e.preventDefault();
+  const addFinancialRow = (section) => async () => {
     const lastRow = financialData[section][financialData[section].length - 1];
     if (lastRow.type === 'Select Type' || (!lastRow.bankName && !lastRow.accountNumber && !lastRow.ifsc && !lastRow.name && !lastRow.detail) || !lastRow.fileUuid) {
       setError(`Please select a type, fill at least one field, and upload a file for ${section} before adding.`);
@@ -182,17 +181,9 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
 
     try {
       const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/financial/document`,
+        `${process.env.REACT_APP_API_URL}/financial/${section.toLowerCase()}`,
         {
-          type: lastRow.type,
-          ...(section === 'Banking' ? {
-            bankName: lastRow.bankName,
-            accountNumber: lastRow.accountNumber,
-            ifsc: lastRow.ifsc,
-          } : {
-            name: lastRow.name,
-            detail: lastRow.detail,
-          }),
+          ...lastRow,
           fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
         },
         {
@@ -227,24 +218,25 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
       setFinancialData((prev) => ({
         ...prev,
         [section]: [
+          ...prev[section],
           {
             id: prev[section].length + 1,
             type: 'Select Type',
-            ...(section === 'Banking' ? { bankName: '', accountNumber: '', ifsc: '', file: null, fileUuid: null } :
-              section === 'Investments' ? { name: '', detail: '', file: null, fileUuid: null } : {})
+            ...(section === 'Banking' ? { bankName: '', accountNumber: '', ifsc: '', fileUuid: null } :
+              section === 'Investments' ? { name: '', detail: '', fileUuid: null } : {})
           },
         ],
       }));
-      setSuccess(`${section} document added successfully`);
+      setSuccess(`${section} added successfully`);
     } catch (error) {
-      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()} document`);
-      console.error(`Add ${section} document error:`, error);
+      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()}`);
+      console.error(`Add ${section} error:`, error);
     }
   };
 
   const deleteFinancialRow = (section, id) => async () => {
     try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/financial/document/${id}`, {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/financial/${section.toLowerCase()}/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAddedDocuments((prev) => ({
@@ -254,15 +246,14 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
       if (addedDocuments[section].length <= 1) {
         setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: false }));
       }
-      setSuccess(`${section} document deleted successfully`);
+      setSuccess(`${section} deleted successfully`);
     } catch (error) {
-      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()} document`);
-      console.error(`Delete ${section} document error:`, error);
+      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()}`);
+      console.error(`Delete ${section} error:`, error);
     }
   };
 
-  const handleUpdateFinancial = async (e) => {
-    e.preventDefault();
+  const handleUpdateFinancial = async () => {
     setError('');
     setSuccess('');
 
@@ -306,7 +297,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
   };
 
   return (
-    <form className="section financial-section" onSubmit={handleUpdateFinancial}>
+    <form className="section financial-section">
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Financial Records
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
@@ -570,7 +561,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
         )}
 
         <button
-          type="submit"
+          onClick={handleUpdateFinancial}
           className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
         >
           Update Financial Details

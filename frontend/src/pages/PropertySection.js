@@ -239,6 +239,7 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
       setPropertyData((prev) => ({
         ...prev,
         [section]: [
+          ...prev[section],
           {
             id: prev[section].length + 1,
             ...(section === 'PropertyDetails'

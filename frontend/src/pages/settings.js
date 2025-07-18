@@ -106,7 +106,7 @@ const Profile = ({ setIsAuthenticated, name }) => {
           <FaBars size={24} />
         </button>
         <div className="main-content">
-          <h2>User Profile</h2>
+          
           <AccountSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
 
         </div>

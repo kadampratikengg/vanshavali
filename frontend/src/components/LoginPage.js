@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './LoginPage.css';
+import toast, { Toaster } from 'react-hot-toast';
 
 const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -16,11 +17,18 @@ const LoginPage = ({ onLogin }) => {
     // Check if email matches the regex pattern
     if (!emailRegex.test(email)) {
       setEmailError('Please enter a valid email address.');
+      toast.error('Please enter a valid email address.', {
+        style: {
+          background: '#fee2e2',
+          color: '#b91c1c',
+        },
+      });
       return;
     }
 
     // Clear the error if email is valid
     setEmailError('');
+    setErrorMessage('');
 
     try {
       // Send POST request to /login for user login
@@ -39,21 +47,42 @@ const LoginPage = ({ onLogin }) => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('userId', data.userId);
         localStorage.setItem('isAuthenticated', 'true');
-        // If login is successful, call onLogin callback
+        // Show success toast
+        toast.success('Login successful!', {
+          style: {
+            background: '#dcfce7',
+            color: '#15803d',
+          },
+        });
+        // Call onLogin callback
         onLogin();
       } else {
-        setErrorMessage(data.message);  // Show error message if any
+        setErrorMessage(data.message);
+        toast.error(data.message, {
+          style: {
+            background: '#fee2e2',
+            color: '#b91c1c',
+          },
+        });
       }
     } catch (err) {
-      setErrorMessage('An error occurred while logging in');
+      const errorMsg = 'An error occurred while logging in';
+      setErrorMessage(errorMsg);
+      toast.error(errorMsg, {
+        style: {
+          background: '#fee2e2',
+          color: '#b91c1c',
+        },
+      });
       console.error(err);
     }
   };
 
   return (
     <div className="login-page">
+      <Toaster position="top-right" reverseOrder={false} />
       <form onSubmit={handleSubmit}>
-        <h2>Login to A M </h2>
+        <h2>Login to A M</h2>
 
         <div className="input-field">
           <label>Email</label>

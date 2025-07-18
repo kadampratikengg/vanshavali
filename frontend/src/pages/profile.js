@@ -25,7 +25,33 @@ const Profile = ({ setIsAuthenticated, name }) => {
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
   const navigate = useNavigate();
+
+  // Listen for changes to localStorage token
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const newToken = localStorage.getItem('token') || '';
+      setToken(newToken);
+      if (!newToken) {
+        setError('Authentication token missing. Please log in again.');
+        setIsAuthenticated(false);
+        navigate('/');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [setIsAuthenticated, navigate, setError]);
+
+  // Validate token presence on mount
+  useEffect(() => {
+    if (!token) {
+      setError('No authentication token found. Please log in.');
+      setIsAuthenticated(false);
+      navigate('/');
+    }
+  }, [token, navigate, setError, setIsAuthenticated]);
 
   // Effect to handle toast notifications
   useEffect(() => {
@@ -56,6 +82,7 @@ const Profile = ({ setIsAuthenticated, name }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
     setIsAuthenticated(false);
+    setToken('');
     navigate('/');
   };
 
@@ -115,15 +142,15 @@ const Profile = ({ setIsAuthenticated, name }) => {
         </button>
         <div className="main-content">
           <h2>User Profile</h2>
-          <AccountSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <IdentitySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <FinancialSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <PropertySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <MedicalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <EducationSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <DigitalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <LegacySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
-          <FamilySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} />
+          <AccountSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <IdentitySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <FinancialSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <PropertySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <MedicalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <EducationSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <DigitalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <LegacySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <FamilySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
         </div>
       </div>
     </div>

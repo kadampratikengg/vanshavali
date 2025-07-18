@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
-const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
+const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
   const [expanded, setExpanded] = useState(false);
   const [personalData, setPersonalData] = useState({
     LegalName: '',
@@ -99,7 +99,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
   useEffect(() => {
     const fetchIdentityData = async () => {
       try {
-        const token = localStorage.getItem('token');
         if (!token) {
           setError('No authentication token found');
           return;
@@ -114,14 +113,20 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
           DateOfBirth: '',
           PlaceOfBirth: '',
         });
-        setAddedDocuments(identityData.map(item => ({
+        // Flatten Government and Other arrays into a single array
+        const combinedDocuments = [
+          ...(identityData?.Government || []),
+          ...(identityData?.Other || []),
+        ].map(item => ({
           id: item._id,
           documentType: item.documentType,
           documentNumber: item.documentNumber,
           fileUrl: item.fileUrl,
-        })) || []);
-        setShowAddedDocuments(identityData.length > 0);
+        }));
+        setAddedDocuments(combinedDocuments);
+        setShowAddedDocuments(combinedDocuments.length > 0);
       } catch (error) {
+        console.error('Fetch identity data error:', error);
         if (error.response?.status === 404) {
           console.warn('Identity endpoint not found, using default data');
           setPersonalData({
@@ -138,7 +143,7 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
       }
     };
     fetchIdentityData();
-  }, [setError]);
+  }, [setError, token]);
 
   const validateInput = (documentType, value) => {
     if (documentType === 'Aadhar' && value && !/^\d{12}$/.test(value)) {
@@ -193,7 +198,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     }
 
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity/document`, {
         documentType: lastRow.documentType,
         documentNumber: lastRow.documentNumber,
@@ -221,14 +225,13 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
       setValidationErrors([{ id: identityData.length + 1, error: '' }]);
       setSuccess('Document added successfully');
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to save document');
+      setError(error.response?.data?.message || 'Failed to add document');
       console.error('Add document error:', error);
     }
   };
 
   const deleteIdentityRow = (id) => async () => {
     try {
-      const token = localStorage.getItem('token');
       await axios.delete(`${process.env.REACT_APP_API_URL}/identity/document/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -250,54 +253,12 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
     setSuccess('');
   };
 
-  const handleUpdateIdentity = async () => {
-    setError('');
-    setSuccess('');
-
-    const hasErrors = validationErrors.some((err) => err.error);
-    if (hasErrors) {
-      setError('Please correct the validation errors before updating');
-      return;
-    }
-
-    const selectedTypes = addedDocuments.map((item) => item.documentType);
-    const uniqueTypes = new Set(selectedTypes);
-    if (uniqueTypes.size < selectedTypes.length) {
-      setError('Each document type can only be selected once');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.put(`${process.env.REACT_APP_API_URL}/identity`, {
-        identityData: addedDocuments,
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setSuccess('Documents updated successfully');
-      setAddedDocuments(response.data.identity.identityData.map(item => ({
-        id: item._id,
-        documentType: item.documentType,
-        documentNumber: item.documentNumber,
-        fileUrl: item.fileUrl,
-      })));
-      setShowAddedDocuments(response.data.identity.identityData.length > 0);
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update identity data');
-      console.error('Update identity error:', error);
-    }
-  };
-
   const handleSectionSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity`, {
         personalData,
       }, {
@@ -306,11 +267,11 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
           'Content-Type': 'application/json',
         },
       });
-      setSuccess('Personal data saved successfully');
+      setSuccess('Personal details updated successfully');
       setPersonalData(response.data.identity.personalData);
       handleSubmit(e);
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to save personal data');
+      setError(error.response?.data?.message || 'Failed to update personal details');
       console.error('Update personal data error:', error);
     }
   };
@@ -462,12 +423,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit }) => {
                 </tbody>
               </table>
             )}
-            {/* <button
-              onClick={handleUpdateIdentity}
-              className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-            >
-              Update Documents
-            </button> */}
           </div>
         )}
         <button

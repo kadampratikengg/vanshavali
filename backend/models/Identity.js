@@ -1,29 +1,35 @@
 const mongoose = require('mongoose');
 
 const identitySchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  personalData: {
-    LegalName: { type: String, trim: true },
-    AlternateName: { type: String, trim: true },
-    DateOfBirth: { type: String, trim: true },
-    PlaceOfBirth: { type: String, trim: true },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'User',
   },
-  identityData: [
-    {
-      _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
-      documentType: { type: String, trim: true },
-      documentNumber: { type: String, trim: true },
-      fileUrl: { type: String },
-    },
-  ],
-  createdAt: { type: Date, default: Date.now },
-});
-
-identitySchema.pre('save', function (next) {
-  if (!this.userId) {
-    return next(new Error('userId is required'));
-  }
-  next();
+  personalData: {
+    LegalName: { type: String, default: '' },
+    AlternateName: { type: String, default: '' },
+    DateOfBirth: { type: String, default: '' },
+    PlaceOfBirth: { type: String, default: '' },
+  },
+  identityData: {
+    Government: [{
+      _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+      documentType: { type: String, required: true },
+      documentNumber: { type: String, required: true },
+      fileUrl: { type: String, required: true },
+    }],
+    Other: [{
+      _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+      documentType: { type: String, required: true },
+      documentNumber: { type: String, required: true },
+      fileUrl: { type: String, required: true },
+    }],
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
 module.exports = mongoose.model('Identity', identitySchema);
