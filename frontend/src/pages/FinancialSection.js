@@ -19,13 +19,19 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
   const widgetRefs = useRef({});
 
   const documentOptions = {
-    Banking: ['Select Document', 'Bank Statement', 'Passbook', 'Fixed Deposit Certificate', 'Other'],
-    Investments: ['Select Document', 'Mutual Fund Statement', 'Demat Account Statement', 'PF Statement', 'Other'],
+    Banking: ['Select Document', 'Bank Details', 'Passbook', 'Fixed Deposit Details', 'Other'],
+    Investments: ['Select Document', 'Mutual Fund Details', 'Demat Account Details', 'PF Details', 'Other'],
   };
 
   const allDocumentTypes = [
     ...new Set(Object.values(documentOptions).flat()),
-  ].sort();
+  ].sort((a, b) => {
+    if (a === 'Select Document') return -1;
+    if (b === 'Select Document') return 1;
+    if (a === 'Other') return 1;
+    if (b === 'Other') return -1;
+    return a.localeCompare(b);
+  });
 
   const validateInput = (section, documentType, documentNumber) => {
     if (documentType === 'Select Document') {
@@ -160,7 +166,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                 id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
                 section: 'Banking',
                 documentType: item.type || 'Select Document',
-                documentNumber: item.accountNumber || '',
+                documentNumber: item.accountNumber || item.number || '',
                 remark: item.remark || '',
                 fileUrl: item.fileUrl || null,
               }))
@@ -170,7 +176,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                 id: item._id || `temp_${Math.random().toString(36).substr(2, 9)}`,
                 section: 'Investments',
                 documentType: item.type || 'Select Document',
-                documentNumber: item.name || '',
+                documentNumber: item.name || item.number || '',
                 remark: item.remark || '',
                 fileUrl: item.fileUrl || null,
               }))
@@ -303,9 +309,9 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
           id: newDocument._id,
           section: newDocument.section || lastRow.section,
           documentType: newDocument.type || 'Select Document',
-          documentNumber: newDocument.number || '',
-          remark: newDocument.remark || '',
-          fileUrl: newDocument.fileUrl || null,
+          documentNumber: newDocument.number || lastRow.documentNumber,
+          remark: newDocument.remark || lastRow.remark,
+          fileUrl: newDocument.fileUrl || `https://ucarecdn.com/${lastRow.fileUuid}/`,
         },
       ]);
       setFinancialData((prev) => [
