@@ -5,8 +5,8 @@ import axios from 'axios';
 const MedicalSection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
   const [medicalData, setMedicalData] = useState({
-    MedicalHistory: [{ id: 1, condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }],
-    MedicalInsurance: [{ id: 1, provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }],
+    MedicalHistory: [{ id: 'temp-1', condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }],
+    MedicalInsurance: [{ id: 'temp-1', provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }],
   });
   const [showAddedDocuments, setShowAddedDocuments] = useState({
     medicalHistory: false,
@@ -15,6 +15,10 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
   const [addedDocuments, setAddedDocuments] = useState({
     MedicalHistory: [],
     MedicalInsurance: [],
+  });
+  const [validationErrors, setValidationErrors] = useState({
+    MedicalHistory: [{ id: 'temp-1', error: '' }],
+    MedicalInsurance: [{ id: 'temp-1', error: '' }],
   });
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
@@ -30,6 +34,28 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
     'O+',
     'O-',
   ];
+
+  const validateInput = (section, data) => {
+    if (section === 'MedicalHistory') {
+      if (!data.condition) {
+        return 'Medical condition is required';
+      }
+      if (data.bloodGroup === 'Select Blood Group') {
+        return 'Please select a valid blood group';
+      }
+      if (!data.fileUuid) {
+        return 'Please upload a file';
+      }
+    } else if (section === 'MedicalInsurance') {
+      if (!data.provider) {
+        return 'Insurance provider is required';
+      }
+      if (!data.fileUuid) {
+        return 'Please upload a file';
+      }
+    }
+    return '';
+  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -61,6 +87,10 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
     }
 
     Object.keys(medicalData).forEach((section) => {
+      if (!Array.isArray(medicalData[section])) {
+        console.error(`medicalData[${section}] is not an array:`, medicalData[section]);
+        return;
+      }
       medicalData[section].forEach((item) => {
         if (!widgetRefs.current[`${section}_${item.id}`]) {
           try {
@@ -108,38 +138,9 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const { medicalData: fetchedData } = response.data;
-        setMedicalData(fetchedData || {
-          MedicalHistory: [{ id: 1, condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }],
-          MedicalInsurance: [{ id: 1, provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }],
-        });
-        setAddedDocuments({
-          MedicalHistory: fetchedData?.MedicalHistory?.map(item => ({
-            id: item._id,
-            condition: item.condition,
-            bloodGroup: item.bloodGroup,
-            height: item.height,
-            weight: item.weight,
-            fileUrl: item.fileUrl,
-          })) || [],
-          MedicalInsurance: fetchedData?.MedicalInsurance?.map(item => ({
-            id: item._id,
-            provider: item.provider,
-            policyNumber: item.policyNumber,
-            expiryDate: item.expiryDate,
-            fileUrl: item.fileUrl,
-          })) || [],
-        });
-        setShowAddedDocuments({
-          medicalHistory: fetchedData?.MedicalHistory?.length > 0,
-          medicalInsurance: fetchedData?.MedicalInsurance?.length > 0,
-        });
-      } catch (error) {
-        if (error.response?.status === 404) {
-          console.warn('Medical endpoint not found, using default data');
-          setMedicalData({
-            MedicalHistory: [{ id: 1, condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }],
-            MedicalInsurance: [{ id: 1, provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }],
-          });
+        console.log('Fetched medical data:', fetchedData);
+        if (!fetchedData || !fetchedData.MedicalHistory || !fetchedData.MedicalInsurance) {
+          console.warn('Invalid medical data structure from server:', fetchedData);
           setAddedDocuments({
             MedicalHistory: [],
             MedicalInsurance: [],
@@ -148,8 +149,55 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
             medicalHistory: false,
             medicalInsurance: false,
           });
+          setValidationErrors({
+            MedicalHistory: [{ id: 'temp-1', error: '' }],
+            MedicalInsurance: [{ id: 'temp-1', error: '' }],
+          });
+          return;
+        }
+        setAddedDocuments({
+          MedicalHistory: fetchedData.MedicalHistory?.map(item => ({
+            id: item._id,
+            condition: item.condition,
+            bloodGroup: item.bloodGroup,
+            height: item.height,
+            weight: item.weight,
+            fileUrl: item.fileUrl,
+          })) || [],
+          MedicalInsurance: fetchedData.MedicalInsurance?.map(item => ({
+            id: item._id,
+            provider: item.provider,
+            policyNumber: item.policyNumber,
+            expiryDate: item.expiryDate,
+            fileUrl: item.fileUrl,
+          })) || [],
+        });
+        setShowAddedDocuments({
+          medicalHistory: fetchedData.MedicalHistory?.length > 0,
+          medicalInsurance: fetchedData.MedicalInsurance?.length > 0,
+        });
+        setValidationErrors({
+          MedicalHistory: [{ id: 'temp-1', error: '' }],
+          MedicalInsurance: [{ id: 'temp-1', error: '' }],
+        });
+      } catch (error) {
+        if (error.response?.status === 404) {
+          console.warn('Medical endpoint not found, using default data');
+          setAddedDocuments({
+            MedicalHistory: [],
+            MedicalInsurance: [],
+          });
+          setShowAddedDocuments({
+            medicalHistory: false,
+            medicalInsurance: false,
+          });
+          setValidationErrors({
+            MedicalHistory: [{ id: 'temp-1', error: '' }],
+            MedicalInsurance: [{ id: 'temp-1', error: '' }],
+          });
         } else {
           setError(error.response?.data?.message || 'Failed to fetch medical data');
+          console.error('Fetch medical data error:', error);
         }
       }
     };
@@ -163,6 +211,12 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
         item.id === id ? { ...item, [field]: value } : item
       ),
     }));
+    setValidationErrors((prev) => ({
+      ...prev,
+      [section]: prev[section].map((err) =>
+        err.id === id ? { ...err, error: '' } : err
+      ),
+    }));
     setError('');
     setSuccess('');
   };
@@ -170,9 +224,15 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
   const addTableRow = (section) => async (e) => {
     e.preventDefault();
     const lastRow = medicalData[section][medicalData[section].length - 1];
-    const hasData = Object.values(lastRow).some((val, idx) => idx !== 0 && val && val !== 'Select Blood Group');
-    if (!hasData || !lastRow.fileUuid) {
-      setError(`Please fill at least one field, select a valid blood group, and upload a file for ${section} before adding.`);
+    const error = validateInput(section, lastRow);
+    if (error) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        [section]: prev[section].map((err) =>
+          err.id === lastRow.id ? { ...err, error } : err
+        ),
+      }));
+      setError(error);
       return;
     }
 
@@ -226,11 +286,17 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
         ...prev,
         [section]: [
           {
-            id: prev[section].length + 1,
+            id: `temp-${prev[section].length + 1}`,
             ...(section === 'MedicalHistory'
               ? { condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }
               : { provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }),
           },
+        ],
+      }));
+      setValidationErrors((prev) => ({
+        ...prev,
+        [section]: [
+          { id: `temp-${prev[section].length + 1}`, error: '' },
         ],
       }));
       setSuccess(`${section} document added successfully`);
@@ -259,52 +325,8 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
     }
   };
 
-  const handleUpdateMedical = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/medical`,
-        { medicalData: addedDocuments },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      setSuccess('Medical data updated successfully');
-      setAddedDocuments({
-        MedicalHistory: response.data.medicalData.MedicalHistory?.map(item => ({
-          id: item._id,
-          condition: item.condition,
-          bloodGroup: item.bloodGroup,
-          height: item.height,
-          weight: item.weight,
-          fileUrl: item.fileUrl,
-        })) || [],
-        MedicalInsurance: response.data.medicalData.MedicalInsurance?.map(item => ({
-          id: item._id,
-          provider: item.provider,
-          policyNumber: item.policyNumber,
-          expiryDate: item.expiryDate,
-          fileUrl: item.fileUrl,
-        })) || [],
-      });
-      setShowAddedDocuments({
-        medicalHistory: response.data.medicalData.MedicalHistory?.length > 0,
-        medicalInsurance: response.data.medicalData.MedicalInsurance?.length > 0,
-      });
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update medical data');
-      console.error('Update medical error:', error);
-    }
-  };
-
   return (
-    <form className="section medical-section" onSubmit={handleUpdateMedical}>
+    <div className="section medical-section">
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Medical History & Insurance
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
@@ -332,14 +354,19 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
                       type="text"
                       value={item.condition}
                       onChange={(e) => handleTableChange('MedicalHistory', item.id, 'condition', e.target.value)}
-                      className="w-full p-1"
+                      className={`w-full p-1 ${validationErrors.MedicalHistory.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
                     />
+                    {validationErrors.MedicalHistory.find((err) => err.id === item.id)?.error && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {validationErrors.MedicalHistory.find((err) => err.id === item.id).error}
+                      </p>
+                    )}
                   </td>
                   <td className="border p-2">
                     <select
                       value={item.bloodGroup}
                       onChange={(e) => handleTableChange('MedicalHistory', item.id, 'bloodGroup', e.target.value)}
-                      className="w-full p-1"
+                      className={`w-full p-1 ${validationErrors.MedicalHistory.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
                     >
                       {bloodGroupOptions.map((option) => (
                         <option key={option} value={option}>
@@ -465,8 +492,13 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
                       type="text"
                       value={item.provider}
                       onChange={(e) => handleTableChange('MedicalInsurance', item.id, 'provider', e.target.value)}
-                      className="w-full p-1"
+                      className={`w-full p-1 ${validationErrors.MedicalInsurance.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
                     />
+                    {validationErrors.MedicalInsurance.find((err) => err.id === item.id)?.error && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {validationErrors.MedicalInsurance.find((err) => err.id === item.id).error}
+                      </p>
+                    )}
                   </td>
                   <td className="border p-2">
                     <input
@@ -561,15 +593,8 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
             )}
           </div>
         )}
-
-        <button
-          type="submit"
-          className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-        >
-          Update Medical Details
-        </button>
       </div>
-    </form>
+    </div>
   );
 };
 

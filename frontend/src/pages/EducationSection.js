@@ -5,8 +5,8 @@ import axios from 'axios';
 const EducationSection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
   const [educationData, setEducationData] = useState({
-    Education: [{ id: 1, level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }],
-    Employment: [{ id: 1, companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }],
+    Education: [{ id: 'temp-1', level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }],
+    Employment: [{ id: 'temp-1', companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }],
   });
   const [showAddedDocuments, setShowAddedDocuments] = useState({
     education: false,
@@ -15,6 +15,10 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
   const [addedDocuments, setAddedDocuments] = useState({
     Education: [],
     Employment: [],
+  });
+  const [validationErrors, setValidationErrors] = useState({
+    Education: [{ id: 'temp-1', error: '' }],
+    Employment: [{ id: 'temp-1', error: '' }],
   });
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
@@ -29,6 +33,25 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
     'Doctorate',
     'Other',
   ];
+
+  const validateInput = (section, data) => {
+    if (section === 'Education') {
+      if (data.level === 'Select Level') {
+        return 'Please select a valid education level';
+      }
+      if (!data.fileUuid) {
+        return 'Please upload a file';
+      }
+    } else if (section === 'Employment') {
+      if (!data.companyName) {
+        return 'Company name is required';
+      }
+      if (!data.fileUuid) {
+        return 'Please upload a file';
+      }
+    }
+    return '';
+  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -60,6 +83,10 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
     }
 
     Object.keys(educationData).forEach((section) => {
+      if (!Array.isArray(educationData[section])) {
+        console.error(`educationData[${section}] is not an array:`, educationData[section]);
+        return;
+      }
       educationData[section].forEach((item) => {
         if (!widgetRefs.current[`${section}_${item.id}`]) {
           try {
@@ -107,37 +134,9 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const { educationData: fetchedData } = response.data;
-        setEducationData(fetchedData || {
-          Education: [{ id: 1, level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }],
-          Employment: [{ id: 1, companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }],
-        });
-        setAddedDocuments({
-          Education: fetchedData?.Education?.map(item => ({
-            id: item._id,
-            level: item.level,
-            number: item.number,
-            dateOfPassing: item.dateOfPassing,
-            fileUrl: item.fileUrl,
-          })) || [],
-          Employment: fetchedData?.Employment?.map(item => ({
-            id: item._id,
-            companyName: item.companyName,
-            joinDate: item.joinDate,
-            exitDate: item.exitDate,
-            fileUrl: item.fileUrl,
-          })) || [],
-        });
-        setShowAddedDocuments({
-          education: fetchedData?.Education?.length > 0,
-          employment: fetchedData?.Employment?.length > 0,
-        });
-      } catch (error) {
-        if (error.response?.status === 404) {
-          console.warn('Education endpoint not found, using default data');
-          setEducationData({
-            Education: [{ id: 1, level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }],
-            Employment: [{ id: 1, companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }],
-          });
+        console.log('Fetched education data:', fetchedData);
+        if (!fetchedData || !fetchedData.Education || !fetchedData.Employment) {
+          console.warn('Invalid education data structure from server:', fetchedData);
           setAddedDocuments({
             Education: [],
             Employment: [],
@@ -146,8 +145,54 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
             education: false,
             employment: false,
           });
+          setValidationErrors({
+            Education: [{ id: 'temp-1', error: '' }],
+            Employment: [{ id: 'temp-1', error: '' }],
+          });
+          return;
+        }
+        setAddedDocuments({
+          Education: fetchedData.Education?.map(item => ({
+            id: item._id,
+            level: item.level,
+            number: item.number,
+            dateOfPassing: item.dateOfPassing,
+            fileUrl: item.fileUrl,
+          })) || [],
+          Employment: fetchedData.Employment?.map(item => ({
+            id: item._id,
+            companyName: item.companyName,
+            joinDate: item.joinDate,
+            exitDate: item.exitDate,
+            fileUrl: item.fileUrl,
+          })) || [],
+        });
+        setShowAddedDocuments({
+          education: fetchedData.Education?.length > 0,
+          employment: fetchedData.Employment?.length > 0,
+        });
+        setValidationErrors({
+          Education: [{ id: 'temp-1', error: '' }],
+          Employment: [{ id: 'temp-1', error: '' }],
+        });
+      } catch (error) {
+        if (error.response?.status === 404) {
+          console.warn('Education endpoint not found, using default data');
+          setAddedDocuments({
+            Education: [],
+            Employment: [],
+          });
+          setShowAddedDocuments({
+            education: false,
+            employment: false,
+          });
+          setValidationErrors({
+            Education: [{ id: 'temp-1', error: '' }],
+            Employment: [{ id: 'temp-1', error: '' }],
+          });
         } else {
           setError(error.response?.data?.message || 'Failed to fetch education data');
+          console.error('Fetch education data error:', error);
         }
       }
     };
@@ -161,6 +206,12 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
         item.id === id ? { ...item, [field]: value } : item
       ),
     }));
+    setValidationErrors((prev) => ({
+      ...prev,
+      [section]: prev[section].map((err) =>
+        err.id === id ? { ...err, error: '' } : err
+      ),
+    }));
     setError('');
     setSuccess('');
   };
@@ -168,9 +219,15 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
   const addTableRow = (section) => async (e) => {
     e.preventDefault();
     const lastRow = educationData[section][educationData[section].length - 1];
-    const hasData = Object.values(lastRow).some((val, idx) => idx !== 0 && val && val !== 'Select Level');
-    if (!hasData || !lastRow.fileUuid) {
-      setError(`Please fill at least one field, select a valid level, and upload a file for ${section} before adding.`);
+    const error = validateInput(section, lastRow);
+    if (error) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        [section]: prev[section].map((err) =>
+          err.id === lastRow.id ? { ...err, error } : err
+        ),
+      }));
+      setError(error);
       return;
     }
 
@@ -222,11 +279,17 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
         ...prev,
         [section]: [
           {
-            id: prev[section].length + 1,
+            id: `temp-${prev[section].length + 1}`,
             ...(section === 'Education'
               ? { level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }
               : { companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }),
           },
+        ],
+      }));
+      setValidationErrors((prev) => ({
+        ...prev,
+        [section]: [
+          { id: `temp-${prev[section].length + 1}`, error: '' },
         ],
       }));
       setSuccess(`${section} document added successfully`);
@@ -255,51 +318,8 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
     }
   };
 
-  const handleUpdateEducation = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/education`,
-        { educationData: addedDocuments },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      setSuccess('Education data updated successfully');
-      setAddedDocuments({
-        Education: response.data.educationData.Education?.map(item => ({
-          id: item._id,
-          level: item.level,
-          number: item.number,
-          dateOfPassing: item.dateOfPassing,
-          fileUrl: item.fileUrl,
-        })) || [],
-        Employment: response.data.educationData.Employment?.map(item => ({
-          id: item._id,
-          companyName: item.companyName,
-          joinDate: item.joinDate,
-          exitDate: item.exitDate,
-          fileUrl: item.fileUrl,
-        })) || [],
-      });
-      setShowAddedDocuments({
-        education: response.data.educationData.Education?.length > 0,
-        employment: response.data.educationData.Employment?.length > 0,
-      });
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update education data');
-      console.error('Update education error:', error);
-    }
-  };
-
   return (
-    <form className="section education-section" onSubmit={handleUpdateEducation}>
+    <div className="section education-section">
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Education & Employment
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
@@ -325,7 +345,7 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                     <select
                       value={item.level}
                       onChange={(e) => handleTableChange('Education', item.id, 'level', e.target.value)}
-                      className="w-full p-1"
+                      className={`w-full p-1 ${validationErrors.Education.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
                     >
                       {educationLevelOptions.map((option) => (
                         <option key={option} value={option}>
@@ -333,6 +353,11 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                         </option>
                       ))}
                     </select>
+                    {validationErrors.Education.find((err) => err.id === item.id)?.error && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {validationErrors.Education.find((err) => err.id === item.id).error}
+                      </p>
+                    )}
                   </td>
                   <td className="border p-2">
                     <input
@@ -449,8 +474,13 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                       type="text"
                       value={item.companyName}
                       onChange={(e) => handleTableChange('Employment', item.id, 'companyName', e.target.value)}
-                      className="w-full p-1"
+                      className={`w-full p-1 ${validationErrors.Employment.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
                     />
+                    {validationErrors.Employment.find((err) => err.id === item.id)?.error && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {validationErrors.Employment.find((err) => err.id === item.id).error}
+                      </p>
+                    )}
                   </td>
                   <td className="border p-2">
                     <input
@@ -545,15 +575,8 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
             )}
           </div>
         )}
-
-        <button
-          type="submit"
-          className="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-        >
-          Update Education Details
-        </button>
       </div>
-    </form>
+    </div>
   );
 };
 
