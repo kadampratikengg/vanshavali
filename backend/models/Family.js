@@ -5,14 +5,14 @@ const familySchema = new mongoose.Schema({
   familyMembers: [
     {
       _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
-      name: { type: String, trim: true },
-      relation: { type: String, trim: true },
+      name: { type: String, trim: true, required: true },
+      relation: { type: String, trim: true, required: true },
       aadhar: { type: String, trim: true },
       pan: { type: String, trim: true },
       passport: { type: String, trim: true },
       voterId: { type: String, trim: true },
       drivingLicense: { type: String, trim: true },
-      fileUrl: { type: String },
+      fileUrl: { type: String, required: true },
     },
   ],
   createdAt: { type: Date, default: Date.now },

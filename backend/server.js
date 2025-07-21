@@ -10,15 +10,16 @@ const authRoutes = require('./routes/auth');
 const identityRoutes = require('./routes/identity');
 const propertyRoutes = require('./routes/property');
 const financialRoutes = require('./routes/financial');
+const familyRoutes = require('./routes/family');
 const { errorHandler, multerErrorHandler } = require('./middleware/error');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Ensure Uploads Directory Exists
-const uploadPath = './Uploads';
+const uploadPath = path.join(__dirname, 'Uploads');
 if (!fs.existsSync(uploadPath)) {
-  fs.mkdirSync(uploadPath);
+  fs.mkdirSync(uploadPath, { recursive: true });
 }
 
 // Multer Configuration
@@ -44,7 +45,7 @@ app.use(multerErrorHandler);
 
 // Log all incoming requests for debugging
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} from ${req.ip}`);
   next();
 });
 
@@ -76,9 +77,21 @@ async function startServer() {
     app.use('/identity', identityRoutes);
     app.use('/property', upload.any(), propertyRoutes);
     app.use('/financial', upload.any(), financialRoutes);
+    app.use('/family', upload.any(), familyRoutes);
+
+    // Verify route registration
+    console.log('Registered routes:');
+    app._router.stack.forEach((r) => {
+      if (r.route && r.route.path) {
+        console.log(`  ${Object.keys(r.route.methods).join(', ').toUpperCase()} ${r.route.path}`);
+      } else if (r.name === 'router' && r.regexp) {
+        const prefix = r.regexp.toString().replace(/\/\^\\\/(.*?)\\\//, '$1') || '';
+        console.log(`  Router: /${prefix}`);
+      }
+    });
 
     // Serve uploaded files
-    app.use('/Uploads', express.static('Uploads'));
+    app.use('/Uploads', express.static(uploadPath));
 
     // Handle 404 errors
     app.use((req, res, next) => {
@@ -99,7 +112,7 @@ async function startServer() {
     });
 
     // Start Server
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
     });
   } catch (error) {
