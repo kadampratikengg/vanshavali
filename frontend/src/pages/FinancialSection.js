@@ -199,7 +199,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
           null,
           2
         ));
-        setExpanded(true);
+        // setExpanded(true);
       } catch (error) {
         console.error('Fetch error:', {
           message: error.message,
@@ -223,7 +223,7 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
           setFinancialData(defaultData);
           setAddedDocuments([]);
           setValidationErrors([{ id: 1, error: '' }]);
-          setExpanded(true);
+          // setExpanded(true);
         } else {
           setError(error.response?.data?.message || 'Failed to fetch financial data');
         }

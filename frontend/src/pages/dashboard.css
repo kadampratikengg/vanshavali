@@ -117,7 +117,6 @@
   z-index: 100;
   padding: 0.5rem;
   width: 41px;
-
 }
 
 .hamburger-btn:hover {
@@ -413,4 +412,88 @@
 
 .submit-section button:hover {
   background-color: #059669;
+}
+
+/* Family tree container styles */
+.family-tree-container {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+.family-tree-container h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 1rem;
+}
+
+/* Ensure SVG tree fits within container */
+.family-tree-container svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Family tree card styles */
+.family-tree-container g rect {
+  width: 180px;
+  height: 50px;
+  rx: 8px;
+  ry: 8px;
+  fill: #ffffff; /* White background for clarity */
+  stroke: #3182ce; /* Blue border consistent with Tailwind's blue-600 */
+  stroke-width: 1.5px;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)); /* Subtle shadow for depth */
+}
+
+.family-tree-container g text:first-child {
+  fill: #2d3748; /* Dark text consistent with Tailwind's text-gray-800 */
+  font-size: 14px;
+  font-weight: 500;
+  text-anchor: middle; /* Center the text horizontally */
+  x: 0; /* Center of the rectangle */
+  y: 5; /* Slightly above center for vertical alignment */
+  dominant-baseline: middle; /* Center vertically */
+}
+
+.family-tree-container g text:last-child {
+  fill: #4a5568; /* Gray text for relation label, consistent with Tailwind's text-gray-600 */
+  font-size: 10px;
+  font-weight: 400;
+  text-anchor: end; /* Align to the right */
+  x: 95; /* Position outside the right edge of the rectangle */
+  y: -20; /* Position above the top edge of the rectangle */
+}
+
+/* Responsive adjustments for family tree */
+@media (max-width: 768px) {
+  .family-tree-container {
+    height: 400px; /* Reduced height for smaller screens */
+    overflow-x: auto;
+  }
+
+  .family-tree-container g rect {
+    width: 140px; /* Smaller width for mobile */
+    height: 40px;
+    rx: 6px;
+    ry: 6px;
+  }
+
+  .family-tree-container g text:first-child {
+    font-size: 12px; /* Smaller font for mobile */
+    y: 3;
+  }
+
+  .family-tree-container g text:last-child {
+    font-size: 9px;
+    x: 75; /* Adjust for smaller card width */
+    y: -15; /* Adjust for smaller card height */
+  }
 }

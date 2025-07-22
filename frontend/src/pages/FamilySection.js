@@ -204,7 +204,7 @@ const FamilySection = ({ setError, setSuccess, userId, token }) => {
         })));
         console.log('Transformed familyMembers:', JSON.stringify(newFamilyMembers, null, 2));
         console.log('Transformed addedDocuments:', JSON.stringify(newAddedDocuments, null, 2));
-        setExpanded(true);
+        // setExpanded(true);
       } catch (error) {
         console.error('Fetch error:', {
           message: error.message,
@@ -231,7 +231,7 @@ const FamilySection = ({ setError, setSuccess, userId, token }) => {
           setAddedDocuments([]);
           setShowAddedDocuments(false);
           setFamilyValidationErrors([{ id: 1, aadhar: '', pan: '', passport: '', voterId: '', drivingLicense: '' }]);
-          setExpanded(true);
+          // setExpanded(true);
         } else {
           setError(error.response?.data?.message || 'Failed to fetch family data');
         }

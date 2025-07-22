@@ -142,15 +142,15 @@ const Profile = ({ setIsAuthenticated, name }) => {
         </button>
         <div className="main-content">
           <h2>User Profile</h2>
-          <AccountSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <IdentitySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <FinancialSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <PropertySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <MedicalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <EducationSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <DigitalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <LegacySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
-          <FamilySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} />
+          <AccountSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <IdentitySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <FinancialSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <PropertySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <MedicalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <EducationSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <DigitalSection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <LegacySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
+          <FamilySection setError={setError} setSuccess={setSuccess} handleSubmit={handleSubmit} token={token} isOpen={false} />
         </div>
       </div>
     </div>
