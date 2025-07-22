@@ -14,6 +14,7 @@ const familyRoutes = require('./routes/family');
 const medicalRoutes = require('./routes/medical.js');
 const educationRoutes = require('./routes/education');
 const digitalRoutes = require('./routes/digital');
+const legacyRoutes = require('./routes/legacy');
 const { errorHandler, multerErrorHandler } = require('./middleware/error');
 
 const app = express();
@@ -84,6 +85,7 @@ async function startServer() {
     app.use('/medical', upload.any(), medicalRoutes);
     app.use('/education', upload.any(), educationRoutes);
     app.use('/api/digital', digitalRoutes);
+    app.use('/api/legacy', legacyRoutes);
 
     // Verify route registration
     console.log('Registered routes:');

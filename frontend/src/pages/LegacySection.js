@@ -1,81 +1,379 @@
-import React, { useState } from 'react';
-import { FaChevronUp, FaChevronDown } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
+import axios from 'axios';
 
-const LegacySection = ({ setError, setSuccess, handleSubmit }) => {
+const LegacySection = ({ setError, setSuccess, userId, token }) => {
   const [expanded, setExpanded] = useState(false);
-  const [personalLegacy, setPersonalLegacy] = useState({
-    Diary: '',
-    Letters: '',
-    FamilyMedia: '',
-    VoiceMessages: '',
-    Traditions: '',
-    Values: '',
-  });
-  const [files, setFiles] = useState({});
+  const [legacyData, setLegacyData] = useState([
+    {
+      id: 'temp-1',
+      type: 'Select Type',
+      message: '',
+      file: null,
+      fileUuid: null,
+    },
+  ]);
+  const [showAddedDocuments, setShowAddedDocuments] = useState(false);
+  const [addedDocuments, setAddedDocuments] = useState([]);
+  const [validationErrors, setValidationErrors] = useState([{ id: 'temp-1', error: '' }]);
+  const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
+  const widgetRefs = useRef({});
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setPersonalLegacy((prev) => ({ ...prev, [name]: value }));
+  const typeOptions = [
+    'Select Type',
+    'Family Photo',
+    'Voice Messages',
+    'Video Message',
+  ];
+
+  const validateInput = (data) => {
+    if (data.type === 'Select Type') {
+      return 'Please select a valid type';
+    }
+    if (!data.message && !data.fileUuid) {
+      return 'Please provide a message or upload a file';
+    }
+    return '';
+  };
+
+  useEffect(() => {
+    const loadUploadcare = async () => {
+      try {
+        if (!window.uploadcare) {
+          await import('https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js');
+          window.UPLOADCARE_PUBLIC_KEY = process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY;
+          console.log('Uploadcare script loaded successfully');
+        }
+        setUploadcareLoaded(true);
+      } catch (error) {
+        setError('Failed to load Uploadcare widget');
+        console.error('Uploadcare load error:', error);
+      }
+    };
+    loadUploadcare();
+  }, [setError]);
+
+  useEffect(() => {
+    if (!uploadcareLoaded || !window.uploadcare) {
+      return;
+    }
+
+    legacyData.forEach((item) => {
+      if (!widgetRefs.current[item.id]) {
+        try {
+          const widget = window.uploadcare.Widget(`[data-uploadcare-id="Legacy_${item.id}"]`);
+          widget.onUploadComplete((file) => {
+            setLegacyData((prev) =>
+              prev.map((row) =>
+                row.id === item.id ? { ...row, file, fileUuid: file.uuid } : row
+              )
+            );
+          });
+          widgetRefs.current[item.id] = widget;
+        } catch (error) {
+          setError('Failed to initialize Uploadcare widget');
+          console.error(`Uploadcare widget error for ID: ${item.id}`, error);
+        }
+      }
+    });
+
+    return () => {
+      Object.values(widgetRefs.current).forEach((widget) => {
+        try {
+          console.log('Cleaning up Uploadcare widget');
+        } catch (error) {
+          console.error('Error cleaning up Uploadcare widget:', error);
+        }
+      });
+      widgetRefs.current = {};
+    };
+  }, [uploadcareLoaded, legacyData, setError]);
+
+  useEffect(() => {
+    const fetchLegacyData = async () => {
+      try {
+        if (!token) {
+          setError('No authentication token found');
+          return;
+        }
+        console.log('API Base URL:', process.env.REACT_APP_API_URL);
+        console.log('Fetching legacy data from:', `${process.env.REACT_APP_API_URL}/api/legacy`);
+        console.log('Token:', token);
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/legacy`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const { legacyData: fetchedData } = response.data;
+        console.log('Fetched legacy data:', fetchedData);
+        if (!fetchedData || !Array.isArray(fetchedData)) {
+          console.warn('Invalid legacy data structure from server:', fetchedData);
+          setAddedDocuments([]);
+          setShowAddedDocuments(false);
+          setValidationErrors([{ id: 'temp-1', error: '' }]);
+          return;
+        }
+        setAddedDocuments(
+          fetchedData.map((item) => ({
+            id: item._id,
+            type: item.type || 'N/A',
+            message: item.message || '',
+            fileUrl: item.fileUrl || null,
+          }))
+        );
+        setShowAddedDocuments(fetchedData.length > 0);
+        setValidationErrors([{ id: 'temp-1', error: '' }]);
+      } catch (error) {
+        if (error.response?.status === 404) {
+          console.warn('Legacy endpoint not found, using default data');
+          setAddedDocuments([]);
+          setShowAddedDocuments(false);
+          setValidationErrors([{ id: 'temp-1', error: '' }]);
+          setError('Legacy data endpoint not found. Please check the server configuration.');
+        } else {
+          setError(error.response?.data?.message || 'Failed to fetch legacy data');
+          console.error('Fetch legacy data error:', error);
+        }
+      }
+    };
+    fetchLegacyData();
+  }, [setError, token]);
+
+  const handleTableChange = (id, field, value) => {
+    setLegacyData((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
+    setValidationErrors((prev) =>
+      prev.map((err) =>
+        err.id === id ? { ...err, error: '' } : err
+      )
+    );
     setError('');
     setSuccess('');
   };
 
-  const handleFileChange = (name) => (e) => {
-    const file = e.target.files[0];
-    setFiles((prev) => ({ ...prev, [name]: file }));
-  };
-
-  const handleSectionSubmit = (e) => {
+  const addTableRow = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-    console.log({ personalLegacy, files });
-    handleSubmit(e);
+    const lastRow = legacyData[legacyData.length - 1];
+    const error = validateInput(lastRow);
+    if (error) {
+      setValidationErrors((prev) =>
+        prev.map((err) =>
+          err.id === lastRow.id ? { ...err, error } : err
+        )
+      );
+      setError(error);
+      return;
+    }
+
+    try {
+      console.log('API Base URL:', process.env.REACT_APP_API_URL);
+      console.log('Posting to:', `${process.env.REACT_APP_API_URL}/api/legacy/document`);
+      console.log('Payload:', {
+        type: lastRow.type,
+        message: lastRow.message,
+        fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
+      });
+      console.log('Token:', token);
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/api/legacy/document`,
+        {
+          type: lastRow.type,
+          message: lastRow.message,
+          fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const newDocument = response.data.document;
+      setAddedDocuments((prev) => [
+        ...prev,
+        {
+          id: newDocument._id,
+          type: lastRow.type,
+          message: lastRow.message,
+          fileUrl: newDocument.fileUrl,
+        },
+      ]);
+      setShowAddedDocuments(true);
+      setLegacyData([
+        {
+          id: `temp-${legacyData.length + 1}`,
+          type: 'Select Type',
+          message: '',
+          file: null,
+          fileUuid: null,
+        },
+      ]);
+      setValidationErrors([{ id: `temp-${legacyData.length + 1}`, error: '' }]);
+      setSuccess('Legacy document added successfully');
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setError('Legacy document endpoint not found. Please check the server configuration or contact support.');
+      } else {
+        setError(error.response?.data?.message || 'Failed to save legacy document');
+      }
+      console.error('Add legacy document error:', error);
+    }
+  };
+
+  const deleteTableRow = (id) => async () => {
+    try {
+      console.log('API Base URL:', process.env.REACT_APP_API_URL);
+      console.log('Deleting document at:', `${process.env.REACT_APP_API_URL}/api/legacy/document/${id}`);
+      console.log('Token:', token);
+      await axios.delete(`${process.env.REACT_APP_API_URL}/api/legacy/document/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
+      if (addedDocuments.length <= 1) {
+        setShowAddedDocuments(false);
+      }
+      setSuccess('Legacy document deleted successfully');
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setError('Legacy document endpoint not found. Please check the server configuration or contact support.');
+      } else {
+        setError(error.response?.data?.message || 'Failed to delete legacy document');
+      }
+      console.error('Delete legacy document error:', error);
+    }
   };
 
   return (
-    <form className="section legacy-section" onSubmit={handleSectionSubmit}>
+    <div className="section legacy-section">
       <h3 onClick={() => setExpanded((prev) => !prev)}>
         Personal and Emotional Legacy
         {expanded ? <FaChevronUp className="chevron-icon" /> : <FaChevronDown className="chevron-icon" />}
       </h3>
       <div className={`section-content ${expanded ? 'expanded' : 'collapsed'} overflow-y-auto max-h-[500px]`}>
-        <div className="form-grid">
-          {Object.keys(personalLegacy).map((key) => (
-            <div key={key} className="form-row">
-              <div className="grid grid-cols-2 gap-2 items-center">
-                <div>
-                  <label htmlFor={key}>{key.replace(/([A-Z])/g, ' $1').trim()}:</label>
-                  <textarea
-                    id={key}
-                    name={key}
-                    value={personalLegacy[key]}
-                    onChange={handleInputChange}
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
-                {['FamilyMedia', 'VoiceMessages'].includes(key) && (
-                  <div>
-                    <label htmlFor={`${key}File`}>Upload {key.replace(/([A-Z])/g, ' $1').trim()}:</label>
-                    <input
-                      type="file"
-                      id={`${key}File`}
-                      name={`${key}File`}
-                      onChange={handleFileChange(`${key}File`)}
-                      className="w-full p-2 border rounded"
-                      accept=".pdf,.jpg,.png,.mp4,.mp3"
-                    />
-                    {files[`${key}File`] && (
-                      <p className="text-sm text-gray-500 mt-1">Uploaded: {files[`${key}File`].name}</p>
+        {/* Legacy Details Table */}
+        <div className="table-container mb-6">
+          <h4>Legacy Details</h4>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-2">Type</th>
+                <th className="border p-2">Message</th>
+                <th className="border p-2">Upload File</th>
+                <th className="border p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {legacyData.map((item) => (
+                <tr key={item.id} className="table-row">
+                  <td className="border p-2">
+                    <select
+                      value={item.type}
+                      onChange={(e) => handleTableChange(item.id, 'type', e.target.value)}
+                      className={`w-full p-1 ${validationErrors.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
+                    >
+                      {typeOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    {validationErrors.find((err) => err.id === item.id)?.error && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {validationErrors.find((err) => err.id === item.id).error}
+                      </p>
                     )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="border p-2">
+                    <textarea
+                      value={item.message}
+                      onChange={(e) => handleTableChange(item.id, 'message', e.target.value)}
+                      className={`w-full p-1 ${validationErrors.find((err) => err.id === item.id)?.error ? 'border-red-500' : ''}`}
+                    />
+                  </td>
+                  <td className="border p-2">
+                    {uploadcareLoaded ? (
+                      <div>
+                        <input
+                          type="hidden"
+                          data-uploadcare-id={`Legacy_${item.id}`}
+                          data-public-key={process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY}
+                          data-images-only="false"
+                          data-max-size="104857600"
+                          data-file-types=".pdf,.jpg,.png,.mp4,.mp3"
+                          className="w-full"
+                        />
+                        {item.file && <p className="text-sm text-gray-500 mt-1">Uploaded: {item.file.name}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">Loading uploader...</p>
+                    )}
+                  </td>
+                  <td className="border p-2">
+                    <button
+                      onClick={addTableRow}
+                      className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 text-sm"
+                    >
+                      Add
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+        {showAddedDocuments && (
+          <div className="table-container mt-6">
+            <h4>Added Legacy Details</h4>
+            {addedDocuments.length === 0 ? (
+              <p className="text-gray-500">No legacy details added yet.</p>
+            ) : (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border p-2">Type</th>
+                    <th className="border p-2">Message</th>
+                    <th className="border p-2">View File</th>
+                    <th className="border p-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {addedDocuments.map((item) => (
+                    <tr key={item.id} className="table-row">
+                      <td className="border p-2">{item.type !== 'Select Type' ? item.type : 'N/A'}</td>
+                      <td className="border p-2">{item.message || 'N/A'}</td>
+                      <td className="border p-2">
+                        {item.fileUrl ? (
+                          <a
+                            href={item.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            View File
+                          </a>
+                        ) : (
+                          'No file uploaded'
+                        )}
+                      </td>
+                      <td className="border p-2">
+                        <button
+                          onClick={deleteTableRow(item.id)}
+                          className="text-red-500"
+                        >
+                          <FaTimes />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
-    </form>
+    </div>
   );
 };
 
