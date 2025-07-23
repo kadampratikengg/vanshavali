@@ -1,0 +1,22 @@
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'jenkins'
+        metrics_path: /prometheus
+        static_configs:
+          - targets: ['jenkins:8080']
+      - job_name: 'frontend'
+        static_configs:
+          - targets: ['frontend-service:80']
+      - job_name: 'backend'
+        static_configs:
+          - targets: ['backend-service:8080']
+```
