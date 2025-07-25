@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate for navigation
+import { useNavigate } from 'react-router-dom';
 import './FamilyTree.css';
 import axios from 'axios';
 
@@ -17,7 +17,7 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
   const [identityDocuments, setIdentityDocuments] = useState([]);
   const userId = localStorage.getItem('userId');
   const token = localStorage.getItem('token');
-  const navigate = useNavigate(); // Initialize navigate hook
+  const navigate = useNavigate();
 
   const relationOptions = useMemo(() => [
     'Father',
@@ -116,7 +116,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
 
   const handleCardClick = (member) => {
     if (member.relation === 'Self') {
-      // Navigate to a new page with the user's identity data
       navigate('/member-details', {
         state: {
           member: {
@@ -137,7 +136,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
         },
       });
     } else {
-      // Fetch family member details
       axios
         .get(`${process.env.REACT_APP_API_URL}/family/${member._id}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -156,9 +154,9 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
                 drivingLicense: memberData.drivingLicense || 'N/A',
                 fileUrl: memberData.fileUrl || null,
                 legalName: memberData.name,
-                alternateName: 'N/A', // Family members don't have alternate name in current schema
-                dateOfBirth: 'N/A', // Family members don't have DOB in current schema
-                placeOfBirth: 'N/A', // Family members don't have POB in current schema
+                alternateName: 'N/A',
+                dateOfBirth: 'N/A',
+                placeOfBirth: 'N/A',
                 documents: memberData.fileUrl ? [{ documentType: 'Family Document', fileUrl: memberData.fileUrl }] : [],
               },
             },
@@ -175,199 +173,106 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
     }
   };
 
-  // Render family members as cards
+  const handleFamilyTreeClick = (member) => {
+    navigate(`/family-tree/${member._id}`, {
+      state: {
+        member: {
+          _id: member._id,
+          name: member.name,
+          relation: member.relation,
+        },
+      },
+    });
+    setToastMessage(`Viewing family tree for ${member.name}`);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  // Define generations and their relations
   const renderFamilyCards = () => {
-    const groupedByRelation = {
-      grandparents: familyCards.filter(m => ['grandfather', 'grandmother'].includes(m.relation.toLowerCase())),
-      parents: familyCards.filter(m => ['father', 'mother'].includes(m.relation.toLowerCase())),
-      selfSpouse: familyCards.filter(m => ['self', 'spouse'].includes(m.relation.toLowerCase())),
-      siblings: familyCards.filter(m => ['brother', 'sister'].includes(m.relation.toLowerCase())),
-      siblingsChildren: familyCards.filter(m => ['son', 'daughter'].includes(m.relation.toLowerCase()) && familyCards.some(s => ['brother', 'sister'].includes(s.relation.toLowerCase()) && s._id === m.parentId)),
-      others: familyCards.filter(m => !['grandfather', 'grandmother', 'father', 'mother', 'spouse', 'brother', 'sister', 'son', 'daughter', 'self'].includes(m.relation.toLowerCase())),
+    const groupedByGeneration = {
+      greatGrandparents: familyCards.filter(m => ['Great-grandfather', 'Great-grandmother'].includes(m.relation)),
+      grandparents: familyCards.filter(m => ['Grandfather', 'Grandmother'].includes(m.relation)),
+      parents: familyCards.filter(m => ['Father', 'Mother', 'Father-in-law', 'Mother-in-law'].includes(m.relation)),
+      selfGeneration: familyCards.filter(m => ['Self', 'Spouse', 'Brother', 'Sister', 'Brother-in-law', 'Sister-in-law'].includes(m.relation)),
+      children: familyCards.filter(m => ['Son', 'Daughter'].includes(m.relation)),
+      grandchildren: familyCards.filter(m => ['Grandson', 'Granddaughter'].includes(m.relation)),
+      extendedFamily: familyCards.filter(m => ['Uncle', 'Aunt', 'Nephew', 'Niece', 'Cousin'].includes(m.relation)),
+      others: familyCards.filter(m => m.relation === 'Other'),
     };
+
+    // Define CSS classes for each generation
+    const generationClasses = {
+      greatGrandparents: 'great-grandparents',
+      grandparents: 'grandparents',
+      parents: 'parents',
+      selfGeneration: 'selfSpouse',
+      children: 'children',
+      grandchildren: 'grandchildren',
+      extendedFamily: 'extendedFamily',
+      others: 'others',
+    };
+
+    const renderGroup = (group, title, className) => (
+      group.length > 0 && (
+        <div className="relation-group">
+          <h4 className="relation-title">{title}</h4>
+          <div className="card-row">
+            {group.map(member => (
+              <div
+                key={member._id}
+                className={`family-card ${className}`}
+                style={{ cursor: 'default' }}
+              >
+                <h5>{member.name}</h5>
+                <p><strong>Relation:</strong> {member.relation}</p>
+                {/* <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
+                <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
+                <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
+                <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
+                <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p> */}
+                <br></br>
+                <div className="flex flex-row gap-2 mt-2">
+                  <button
+                    onClick={() => handleCardClick(member)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
+                  >
+                    View Details
+                  </button>
+                  <button
+                    onClick={() => handleFamilyTreeClick(member)}
+                    className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm"
+                  >
+                    View Family
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    );
 
     return (
       <div className="family-cards-container">
-        {groupedByRelation.grandparents.length > 0 && (
-          <div className="relation-group">
-            <h4 className="relation-title">Grandparents</h4>
-            <div className="card-row">
-              {groupedByRelation.grandparents.map(member => (
-                <div
-                  key={member._id}
-                  className="family-card grandparents"
-                  onClick={() => handleCardClick(member)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <h5>{member.name}</h5>
-                  <p><strong>Relation:</strong> {member.relation}</p>
-                  <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                  <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                  <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                  <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                  <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p>
-                  {member.fileUrl && (
-                    <a href={member.fileUrl} target="_blank" rel="noopener noreferrer" className="file-link">
-                      View Document
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {groupedByRelation.parents.length > 0 && (
-          <div className="relation-group">
-            <h4 className="relation-title">Parents</h4>
-            <div className="card-row">
-              {groupedByRelation.parents.map(member => (
-                <div
-                  key={member._id}
-                  className="family-card parents"
-                  onClick={() => handleCardClick(member)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <h5>{member.name}</h5>
-                  <p><strong>Relation:</strong> {member.relation}</p>
-                  <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                  <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                  <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                  <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                  <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p>
-                  {member.fileUrl && (
-                    <a href={member.fileUrl} target="_blank" rel="noopener noreferrer" className="file-link">
-                      View Document
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {groupedByRelation.selfSpouse.length > 0 && (
-          <div className="relation-group">
-            <h4 className="relation-title">Self & Spouse</h4>
-            <div className="card-row">
-              {groupedByRelation.selfSpouse.map(member => (
-                <div
-                  key={member._id}
-                  className="family-card selfSpouse"
-                  onClick={() => handleCardClick(member)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <h5>{member.name}</h5>
-                  <p><strong>Relation:</strong> {member.relation}</p>
-                  <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                  <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                  <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                  <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                  <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p>
-                  {member.fileUrl && (
-                    <a href={member.fileUrl} target="_blank" rel="noopener noreferrer" className="file-link">
-                      View Document
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {groupedByRelation.siblings.length > 0 && (
-          <div className="relation-group">
-            <h4 className="relation-title">Siblings</h4>
-            <div className="card-row">
-              {groupedByRelation.siblings.map(member => (
-                <div
-                  key={member._id}
-                  className="family-card siblings"
-                  onClick={() => handleCardClick(member)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <h5>{member.name}</h5>
-                  <p><strong>Relation:</strong> {member.relation}</p>
-                  <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                  <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                  <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                  <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                  <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p>
-                  {member.fileUrl && (
-                    <a href={member.fileUrl} target="_blank" rel="noopener noreferrer" className="file-link">
-                      View Document
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-            {groupedByRelation.siblingsChildren.length > 0 && (
-              <div className="children-row">
-                <h4 className="relation-title">Siblings' Children</h4>
-                <div className="card-row">
-                  {groupedByRelation.siblingsChildren.map(member => (
-                    <div
-                      key={member._id}
-                      className="family-card siblingsChildren"
-                      onClick={() => handleCardClick(member)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <h5>{member.name}</h5>
-                      <p><strong>Relation:</strong> {member.relation}</p>
-                      <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                      <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                      <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                      <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                      <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p>
-                      {member.fileUrl && (
-                        <a href={member.fileUrl} target="_blank" rel="noopener noreferrer" className="file-link">
-                          View Document
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        {groupedByRelation.others.length > 0 && (
-          <div className="relation-group">
-            <h4 className="relation-title">Other Relations</h4>
-            <div className="card-row">
-              {groupedByRelation.others.map(member => (
-                <div
-                  key={member._id}
-                  className="family-card others"
-                  onClick={() => handleCardClick(member)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <h5>{member.name}</h5>
-                  <p><strong>Relation:</strong> {member.relation}</p>
-                  <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                  <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                  <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                  <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                  <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p>
-                  {member.fileUrl && (
-                    <a href={member.fileUrl} target="_blank" rel="noopener noreferrer" className="file-link">
-                      View Document
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {renderGroup(groupedByGeneration.greatGrandparents, 'Great-Grandparents', generationClasses.greatGrandparents)}
+        {renderGroup(groupedByGeneration.grandparents, 'Grandparents', generationClasses.grandparents)}
+        {renderGroup(groupedByGeneration.parents, 'Parents & In-Laws', generationClasses.parents)}
+        {renderGroup(groupedByGeneration.selfGeneration, 'Self, Spouse & Siblings', generationClasses.selfGeneration)}
+        {renderGroup(groupedByGeneration.children, 'Children', generationClasses.children)}
+        {renderGroup(groupedByGeneration.grandchildren, 'Grandchildren', generationClasses.grandchildren)}
+        {renderGroup(groupedByGeneration.extendedFamily, 'Extended Family', generationClasses.extendedFamily)}
+        {renderGroup(groupedByGeneration.others, 'Other Relations', generationClasses.others)}
       </div>
     );
   };
 
   return (
     <div className="main-content">
-      <h2>Welcome {legalName}</h2>
-      <h4>Your Family Tree</h4>
+      <h1>Hi, {legalName}</h1>
+      <h5>Family Details of {legalName}</h5>
       {error && <p className="error">{error}</p>}
       {toastMessage && <div className="toast">{toastMessage}</div>}
       <div className="family-details">
-        <h3>Family Details</h3>
         {familyCards.length > 0 ? renderFamilyCards() : <p>No family members registered.</p>}
       </div>
     </div>
