@@ -6,6 +6,9 @@ import ForgotPasswordPage from './components/forgot-password';
 import Dashboard from './pages/dashboard';
 import Profile from './pages/profile';
 import Settings from './pages/settings';
+import FamilyTree from './pages/FamilyTree';
+import MemberDetails from './pages/MemberDetails';
+
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -36,6 +39,9 @@ const App = () => {
               <Route path='/dashboard' element={<Dashboard setIsAuthenticated={setIsAuthenticated} />} />
               <Route path='/profile' element={<Profile setIsAuthenticated={setIsAuthenticated} />} />
               <Route path='/settings' element={<Settings setIsAuthenticated={setIsAuthenticated} />} />
+              <Route path="/family-tree" element={<FamilyTree setIsAuthenticated={setIsAuthenticated} />} />
+              <Route path="/member-details" element={<MemberDetails  setIsAuthenticated={setIsAuthenticated}/>} />
+              
             </>
           ) : (
             <>

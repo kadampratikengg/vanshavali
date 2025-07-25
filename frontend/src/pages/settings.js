@@ -11,7 +11,7 @@ import {
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
-import AccountSection from './AccountSection';
+import AccountSection from '../preview/AccountSection';
 
 const Profile = ({ setIsAuthenticated, name }) => {
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(true);
