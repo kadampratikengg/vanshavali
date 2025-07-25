@@ -94,51 +94,51 @@ const MemberDetails = ({ setIsAuthenticated, name }) => {
     navigate('/dashboard');
   };
 
-  const handleDownload = async () => {
-    try {
-      setError('');
-      setSuccess('');
+  // const handleDownload = async () => {
+  //   try {
+  //     setError('');
+  //     setSuccess('');
 
-      // Check if the generate-pdf endpoint exists
-      try {
-        await axios.head(`${process.env.REACT_APP_API_URL}/generate-pdf`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch (err) {
-        if (err.response?.status === 404) {
-          setError('PDF generation is not available at this time. Please contact support.');
-          return;
-        }
-        throw err; // Rethrow other errors
-      }
+  //     // Check if the generate-pdf endpoint exists
+  //     try {
+  //       await axios.head(`${process.env.REACT_APP_API_URL}/generate-pdf`, {
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       });
+  //     } catch (err) {
+  //       if (err.response?.status === 404) {
+  //         setError('PDF generation is not available at this time. Please contact support.');
+  //         return;
+  //       }
+  //       throw err; // Rethrow other errors
+  //     }
 
-      // Proceed with PDF download
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/generate-pdf`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob',
-      });
+  //     // Proceed with PDF download
+  //     const response = await axios.get(`${process.env.REACT_APP_API_URL}/generate-pdf`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //       responseType: 'blob',
+  //     });
 
-      // Create a blob URL for the PDF
-      const pdfBlob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(pdfBlob);
+  //     // Create a blob URL for the PDF
+  //     const pdfBlob = new Blob([response.data], { type: 'application/pdf' });
+  //     const url = window.URL.createObjectURL(pdfBlob);
 
-      // Create a temporary link element to trigger download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${legalName}_details.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+  //     // Create a temporary link element to trigger download
+  //     const link = document.createElement('a');
+  //     link.href = url;
+  //     link.download = `${legalName}_details.pdf`;
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
+  //     window.URL.revokeObjectURL(url);
 
-      setSuccess('PDF downloaded successfully');
-    } catch (err) {
-      console.error('Download PDF error:', err);
-      setError(err.response?.status === 404 
-        ? 'PDF generation endpoint not found. Please contact support.'
-        : 'Failed to download PDF');
-    }
-  };
+  //     setSuccess('PDF downloaded successfully');
+  //   } catch (err) {
+  //     console.error('Download PDF error:', err);
+  //     setError(err.response?.status === 404 
+  //       ? 'PDF generation endpoint not found. Please contact support.'
+  //       : 'Failed to download PDF');
+  //   }
+  // };
 
   return (
     <div className="dashboard">
@@ -162,12 +162,12 @@ const MemberDetails = ({ setIsAuthenticated, name }) => {
     >
       Back to Dashboard
     </button>
-    <button
+    {/* <button
       onClick={handleDownload}
       className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
     >
       Download PDF
-    </button>
+    </button> */}
   </div>
 </div>
         </div>

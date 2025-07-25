@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import './FamilyTree.css';
 import axios from 'axios';
 
@@ -15,9 +15,11 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
     PlaceOfBirth: '',
   });
   const [identityDocuments, setIdentityDocuments] = useState([]);
+  const [selectedMemberName, setSelectedMemberName] = useState(null);
   const userId = localStorage.getItem('userId');
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+  const { memberId } = useParams();
 
   const relationOptions = useMemo(() => [
     'Father',
@@ -75,10 +77,24 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
         setIdentityDocuments(combinedDocuments);
 
         // Fetch Family Data
-        const familyResponse = await axios.get(`${process.env.REACT_APP_API_URL}/family`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const { familyMembers } = familyResponse.data;
+        let familyMembers = [];
+        let selectedMember = null;
+        if (memberId) {
+          // Fetch family data for specific member
+          const familyResponse = await axios.get(`${process.env.REACT_APP_API_URL}/family/${memberId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          familyMembers = familyResponse.data.familyMembers || [];
+          selectedMember = familyResponse.data.familyMembers[0];
+          setSelectedMemberName(selectedMember?.name || 'Member');
+        } else {
+          // Fetch all family data
+          const familyResponse = await axios.get(`${process.env.REACT_APP_API_URL}/family`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          familyMembers = familyResponse.data.familyMembers || [];
+          setSelectedMemberName(personalData?.LegalName || name || 'User');
+        }
 
         // Ensure unique family members
         const uniqueMembers = [];
@@ -91,8 +107,21 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
           }
         });
 
-        // Include self data in family cards
-        setFamilyCards([
+        // Include selected member as root if viewing their tree
+        const cards = memberId && selectedMember ? [
+          {
+            _id: memberId,
+            name: selectedMember.name || 'Member',
+            relation: 'Self',
+            aadhar: selectedMember.aadhar || 'N/A',
+            pan: selectedMember.pan || 'N/A',
+            passport: selectedMember.passport || 'N/A',
+            voterId: selectedMember.voterId || 'N/A',
+            drivingLicense: selectedMember.drivingLicense || 'N/A',
+            fileUrl: selectedMember.fileUrl || null,
+          },
+          ...uniqueMembers,
+        ] : [
           {
             _id: userId,
             name: personalData?.LegalName || name || 'User',
@@ -105,16 +134,66 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
             fileUrl: combinedDocuments[0]?.fileUrl || null,
           },
           ...uniqueMembers,
-        ]);
+        ];
+
+        setFamilyCards(cards);
+
+        if (cards.length === 0 && memberId) {
+          setError('No family members found for this member.');
+        }
       } catch (error) {
         console.error('Fetch data error:', error);
         setError(error.response?.data?.message || 'Failed to fetch family data');
       }
     };
     fetchData();
-  }, [token, userId, name, relationOptions]);
+  }, [token, userId, name, relationOptions, memberId]);
 
-  const handleCardClick = (member) => {
+  const checkIdentityMatch = async (member) => {
+    try {
+      const identityResponse = await axios.get(`${process.env.REACT_APP_API_URL}/identity`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { identityData } = identityResponse.data;
+      const combinedDocuments = [
+        ...(identityData?.Government || []),
+        ...(identityData?.Other || []),
+      ];
+
+      const memberIdentifiers = {
+        aadhar: member.aadhar || '',
+        pan: member.pan || '',
+        passport: member.passport || '',
+        voterId: member.voterId || '',
+        drivingLicense: member.drivingLicense || '',
+      };
+
+      const match = combinedDocuments.find(doc =>
+        (doc.documentType === 'Aadhar' && doc.documentNumber === memberIdentifiers.aadhar && memberIdentifiers.aadhar) ||
+        (doc.documentType === 'Pan' && doc.documentNumber === memberIdentifiers.pan && memberIdentifiers.pan) ||
+        (doc.documentType === 'Passport' && doc.documentNumber === memberIdentifiers.passport && memberIdentifiers.passport) ||
+        (doc.documentType === 'Voter Id' && doc.documentNumber === memberIdentifiers.voterId && memberIdentifiers.voterId) ||
+        (doc.documentType === 'Driving License' && doc.documentNumber === memberIdentifiers.drivingLicense && memberIdentifiers.drivingLicense)
+      );
+
+      return match ? { matched: true, identityData: combinedDocuments } : { matched: false };
+    } catch (error) {
+      console.error('Identity match check error:', error);
+      setError('Failed to verify member identity');
+      return { matched: false };
+    }
+  };
+
+  const handleCardClick = async (member) => {
+    const { matched, identityData } = await checkIdentityMatch(member);
+    
+    if (!matched && member.relation !== 'Self') {
+      setError('Member details not found in the database.');
+      setToastMessage('Member details not found in the database.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
     if (member.relation === 'Self') {
       navigate('/member-details', {
         state: {
@@ -136,44 +215,51 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
         },
       });
     } else {
-      axios
-        .get(`${process.env.REACT_APP_API_URL}/family/${member._id}`, {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/family/${member._id}`, {
           headers: { Authorization: `Bearer ${token}` },
-        })
-        .then(response => {
-          const memberData = response.data.familyMembers[0] || member;
-          navigate('/member-details', {
-            state: {
-              member: {
-                name: memberData.name,
-                relation: memberData.relation,
-                aadhar: memberData.aadhar || 'N/A',
-                pan: memberData.pan || 'N/A',
-                passport: memberData.passport || 'N/A',
-                voterId: memberData.voterId || 'N/A',
-                drivingLicense: memberData.drivingLicense || 'N/A',
-                fileUrl: memberData.fileUrl || null,
-                legalName: memberData.name,
-                alternateName: 'N/A',
-                dateOfBirth: 'N/A',
-                placeOfBirth: 'N/A',
-                documents: memberData.fileUrl ? [{ documentType: 'Family Document', fileUrl: memberData.fileUrl }] : [],
-              },
-            },
-          });
-          setToastMessage(`Viewing details for ${member.name}`);
-          setTimeout(() => setToastMessage(''), 3000);
-        })
-        .catch(error => {
-          console.error('Fetch member details error:', error);
-          setError(error.response?.data?.message || 'Failed to fetch member details');
-          setToastMessage('Error fetching member details');
-          setTimeout(() => setToastMessage(''), 3000);
         });
+        const memberData = response.data.familyMembers[0] || member;
+        navigate('/member-details', {
+          state: {
+            member: {
+              name: memberData.name,
+              relation: memberData.relation,
+              aadhar: memberData.aadhar || 'N/A',
+              pan: memberData.pan || 'N/A',
+              passport: memberData.passport || 'N/A',
+              voterId: memberData.voterId || 'N/A',
+              drivingLicense: memberData.drivingLicense || 'N/A',
+              fileUrl: memberData.fileUrl || null,
+              legalName: memberData.name,
+              alternateName: 'N/A',
+              dateOfBirth: 'N/A',
+              placeOfBirth: 'N/A',
+              documents: identityData || (memberData.fileUrl ? [{ documentType: 'Family Document', fileUrl: memberData.fileUrl }] : []),
+            },
+          },
+        });
+        setToastMessage(`Viewing details for ${member.name}`);
+        setTimeout(() => setToastMessage(''), 3000);
+      } catch (error) {
+        console.error('Fetch member details error:', error);
+        setError(error.response?.data?.message || 'Failed to fetch member details');
+        setToastMessage('Error fetching member details');
+        setTimeout(() => setToastMessage(''), 3000);
+      }
     }
   };
 
-  const handleFamilyTreeClick = (member) => {
+  const handleFamilyTreeClick = async (member) => {
+    const { matched } = await checkIdentityMatch(member);
+    
+    if (!matched && member.relation !== 'Self') {
+      setError('Member details not found in the database.');
+      setToastMessage('Member details not found in the database.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
     navigate(`/family-tree/${member._id}`, {
       state: {
         member: {
@@ -225,11 +311,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
               >
                 <h5>{member.name}</h5>
                 <p><strong>Relation:</strong> {member.relation}</p>
-                {/* <p><strong>Aadhar:</strong> {member.aadhar || 'N/A'}</p>
-                <p><strong>PAN:</strong> {member.pan || 'N/A'}</p>
-                <p><strong>Passport:</strong> {member.passport || 'N/A'}</p>
-                <p><strong>Voter ID:</strong> {member.voterId || 'N/A'}</p>
-                <p><strong>Driving License:</strong> {member.drivingLicense || 'N/A'}</p> */}
                 <br></br>
                 <div className="flex flex-row gap-2 mt-2">
                   <button
@@ -269,7 +350,7 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
   return (
     <div className="main-content">
       <h1>Hi, {legalName}</h1>
-      <h5>Family Details of {legalName}</h5>
+      <h5>Family Details of {selectedMemberName}</h5>
       {error && <p className="error">{error}</p>}
       {toastMessage && <div className="toast">{toastMessage}</div>}
       <div className="family-details">
