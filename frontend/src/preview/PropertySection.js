@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
 const PropertySection = ({ setError, setSuccess, userId, token }) => {
@@ -14,44 +13,8 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
     fileUuid: null,
   }]);
   const [addedDocuments, setAddedDocuments] = useState([]);
-  const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
-
-  const documentOptions = {
-    'Property Details': ['Select Document', 'Property Deed', '7/12 Extract', 'Title Document', 'Other'],
-    'Vehicle Details': ['Select Document', 'RC Book', 'Insurance Document', 'PUC Certificate', 'Other'],
-    'Sale, Purchase, Agreements, Rent Details': ['Select Document', 'Sale Agreement', 'Purchase Agreement', 'Rent Agreement', 'Other'],
-  };
-
-  const allDocumentTypes = [
-    ...new Set(Object.values(documentOptions).flat()),
-  ].sort();
-
-  const validateInput = (section, documentType, documentNumber) => {
-    if (documentType === 'Select Document') {
-      return 'Please select a valid document type';
-    }
-    if (!documentNumber) {
-      return 'Document number is required';
-    }
-    if (section === 'Property Details' && documentNumber) {
-      if (!/^[A-Za-z0-9/-]{1,50}$/.test(documentNumber)) {
-        return 'Property Document Number must be alphanumeric with optional slashes or hyphens (max 50 characters)';
-      }
-    }
-    if (section === 'Vehicle Details' && documentNumber) {
-      if (!/^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$/.test(documentNumber)) {
-        return 'Vehicle Number must be in format XX00XX0000';
-      }
-    }
-    if (section === 'Sale, Purchase, Agreements, Rent Details' && documentNumber) {
-      if (!/^[A-Za-z0-9/-]{1,50}$/.test(documentNumber)) {
-        return 'Transaction Document Number must be alphanumeric with optional slashes or hyphens (max 50 characters)';
-      }
-    }
-    return '';
-  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -196,13 +159,6 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
         setAddedDocuments(newAddedDocuments);
         console.log('Transformed propertyData:', JSON.stringify(newPropertyData, null, 2));
         console.log('Transformed addedDocuments:', JSON.stringify(newAddedDocuments, null, 2));
-        setValidationErrors(newPropertyData.map(item => ({ id: item.id, error: '' })));
-        console.log('validationErrors:', JSON.stringify(
-          newPropertyData.map(item => ({ id: item.id, error: '' })),
-          null,
-          2
-        ));
-        // setExpanded(true);
       } catch (error) {
         console.error('Fetch error:', error);
         if (error.response?.status === 404) {
@@ -218,8 +174,6 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
           }];
           setPropertyData(defaultData);
           setAddedDocuments([]);
-          setValidationErrors([{ id: 1, error: '' }]);
-          // setExpanded(true);
         } else {
           setError(error.response?.data?.message || 'Failed to fetch property data');
         }
@@ -228,135 +182,10 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
     fetchPropertyData();
   }, [setError, token]);
 
-  const handleTableChange = (id, field, value) => {
-    setPropertyData((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
-    );
-    if (field === 'documentNumber' || field === 'documentType' || field === 'section') {
-      const updatedRow = propertyData.find((item) => item.id === id);
-      const error = validateInput(
-        field === 'section' ? value : updatedRow.section,
-        field === 'documentType' ? value : updatedRow.documentType,
-        field === 'documentNumber' ? value : updatedRow.documentNumber
-      );
-      setValidationErrors((prev) =>
-        prev.map((err) =>
-          err.id === id ? { ...err, error } : err
-        )
-      );
-    }
-    setError('');
-    setSuccess('');
-  };
-
-  const addTableRow = async () => {
-    const lastRow = propertyData[propertyData.length - 1];
-    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.fileUuid) {
-      setError('Please select a document type, enter a document number, and upload a file before adding.');
-      return;
-    }
-
-    const error = validateInput(lastRow.section, lastRow.documentType, lastRow.documentNumber);
-    if (error) {
-      setValidationErrors((prev) =>
-        prev.map((err) =>
-          err.id === lastRow.id ? { ...err, error } : err
-        )
-      );
-      setError(error);
-      return;
-    }
-
-    try {
-      console.log('Sending POST request to /property/document with payload:', {
-        type: lastRow.documentType,
-        number: lastRow.documentNumber,
-        remark: lastRow.remark || '',
-        fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
-        section: lastRow.section,
-      });
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/property/document`,
-        {
-          type: lastRow.documentType,
-          number: lastRow.documentNumber,
-          remark: lastRow.remark || '',
-          fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
-          section: lastRow.section,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      console.log('POST response:', JSON.stringify(response.data, null, 2));
-
-      const newDocument = response.data.document;
-      if (!newDocument.number) {
-        console.warn(`Missing 'number' in POST response:`, newDocument);
-      }
-      setAddedDocuments((prev) => [
-        ...prev,
-        {
-          id: newDocument._id,
-          section: newDocument.section || lastRow.section,
-          documentType: newDocument.type || 'Select Document',
-          documentNumber: newDocument.number || '',
-          remark: newDocument.remark || '',
-          fileUrl: newDocument.fileUrl || null,
-        },
-      ]);
-      setPropertyData((prev) => [
-        {
-          id: Math.max(...prev.map(row => row.id)) + 1,
-          section: 'Property Details',
-          documentType: 'Select Document',
-          documentNumber: '',
-          remark: '',
-          file: null,
-          fileUuid: null,
-        },
-      ]);
-      setValidationErrors((prev) => [
-        { id: Math.max(...prev.map(err => err.id)) + 1, error: '' },
-      ]);
-      setSuccess('Document added successfully');
-    } catch (error) {
-      console.error('Add document error:', {
-        message: error.message,
-        response: error.response ? {
-          status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers,
-        } : 'No response received',
-      });
-      setError(error.response?.data?.message || 'Failed to save document. Please check the console for details.');
-    }
-  };
-
-  const deleteTableRow = (id) => async () => {
-    try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/property/document/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
-      setSuccess('Document deleted successfully');
-    } catch (error) {
-      console.error('Delete document error:', error);
-      setError(error.response?.data?.message || 'Failed to delete document');
-    }
-  };
-
   const renderTable = () => (
     <div className="table-container mb-6">
-      
       {addedDocuments.length > 0 && (
         <div className="table-container mt-6">
-           
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
@@ -364,7 +193,6 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
                 <th className="border p-2">Document Number</th>
                 <th className="border p-2">Remark</th>
                 <th className="border p-2">View File</th>
-             
               </tr>
             </thead>
             <tbody>
@@ -382,7 +210,6 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
                       'No file uploaded'
                     )}
                   </td>
-                 
                 </tr>
               ))}
             </tbody>
@@ -394,11 +221,10 @@ const PropertySection = ({ setError, setSuccess, userId, token }) => {
 
   return (
     <div className="section property-section">
-      <h3 >
+      <h3>
         Property & Asset Information
-        
       </h3>
-      <div className={`section-content } overflow-y-auto max-h-[500px]`}>
+      <div className="section-content overflow-y-auto max-h-[500px]">
         {renderTable()}
       </div>
     </div>

@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import './FamilyTree.css';
 import axios from 'axios';
+import { Toaster, toast } from 'react-hot-toast';
 
 const FamilyTree = ({ setIsAuthenticated, name }) => {
   const [error, setError] = useState('');
   const [familyCards, setFamilyCards] = useState([]);
-  const [toastMessage, setToastMessage] = useState('');
   const [legalName, setLegalName] = useState('');
   const [personalData, setPersonalData] = useState({
     LegalName: '',
@@ -53,7 +53,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
           return;
         }
 
-        // Fetch Identity Data
         const identityResponse = await axios.get(`${process.env.REACT_APP_API_URL}/identity`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -76,11 +75,9 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
         }));
         setIdentityDocuments(combinedDocuments);
 
-        // Fetch Family Data
         let familyMembers = [];
         let selectedMember = null;
         if (memberId) {
-          // Fetch family data for specific member
           const familyResponse = await axios.get(`${process.env.REACT_APP_API_URL}/family/${memberId}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -88,7 +85,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
           selectedMember = familyResponse.data.familyMembers[0];
           setSelectedMemberName(selectedMember?.name || 'Member');
         } else {
-          // Fetch all family data
           const familyResponse = await axios.get(`${process.env.REACT_APP_API_URL}/family`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -96,7 +92,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
           setSelectedMemberName(personalData?.LegalName || name || 'User');
         }
 
-        // Ensure unique family members
         const uniqueMembers = [];
         const seenIds = new Set();
         familyMembers.forEach(member => {
@@ -107,7 +102,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
           }
         });
 
-        // Include selected member as root if viewing their tree
         const cards = memberId && selectedMember ? [
           {
             _id: memberId,
@@ -189,8 +183,7 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
     
     if (!matched && member.relation !== 'Self') {
       setError('Member details not found in the database.');
-      setToastMessage('Member details not found in the database.');
-      setTimeout(() => setToastMessage(''), 3000);
+      toast.error('Member details not found in the database.', { duration: 3000 });
       return;
     }
 
@@ -239,13 +232,11 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
             },
           },
         });
-        setToastMessage(`Viewing details for ${member.name}`);
-        setTimeout(() => setToastMessage(''), 3000);
+        toast.success(`Viewing details for ${member.name}`, { duration: 3000 });
       } catch (error) {
         console.error('Fetch member details error:', error);
         setError(error.response?.data?.message || 'Failed to fetch member details');
-        setToastMessage('Error fetching member details');
-        setTimeout(() => setToastMessage(''), 3000);
+        toast.error('Error fetching member details', { duration: 3000 });
       }
     }
   };
@@ -255,8 +246,7 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
     
     if (!matched && member.relation !== 'Self') {
       setError('Member details not found in the database.');
-      setToastMessage('Member details not found in the database.');
-      setTimeout(() => setToastMessage(''), 3000);
+      toast.error('Member details not found in the database.', { duration: 3000 });
       return;
     }
 
@@ -269,11 +259,9 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
         },
       },
     });
-    setToastMessage(`Viewing family tree for ${member.name}`);
-    setTimeout(() => setToastMessage(''), 3000);
+    toast.success(`Viewing family tree for ${member.name}`, { duration: 3000 });
   };
 
-  // Define generations and their relations
   const renderFamilyCards = () => {
     const groupedByGeneration = {
       greatGrandparents: familyCards.filter(m => ['Great-grandfather', 'Great-grandmother'].includes(m.relation)),
@@ -286,7 +274,6 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
       others: familyCards.filter(m => m.relation === 'Other'),
     };
 
-    // Define CSS classes for each generation
     const generationClasses = {
       greatGrandparents: 'great-grandparents',
       grandparents: 'grandparents',
@@ -311,7 +298,7 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
               >
                 <h5>{member.name}</h5>
                 <p><strong>Relation:</strong> {member.relation}</p>
-                <br></br>
+                <br />
                 <div className="flex flex-row gap-2 mt-2">
                   <button
                     onClick={() => handleCardClick(member)}
@@ -349,10 +336,10 @@ const FamilyTree = ({ setIsAuthenticated, name }) => {
 
   return (
     <div className="main-content">
+      <Toaster position="top-right" reverseOrder={false} />
       <h1>Hi, {legalName}</h1>
       <h5>Family Details of {selectedMemberName}</h5>
       {error && <p className="error">{error}</p>}
-      {toastMessage && <div className="toast">{toastMessage}</div>}
       <div className="family-details">
         {familyCards.length > 0 ? renderFamilyCards() : <p>No family members registered.</p>}
       </div>
