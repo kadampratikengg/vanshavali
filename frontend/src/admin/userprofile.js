@@ -9,7 +9,7 @@ import {
   FaSignOutAlt,
   FaBars,
 } from 'react-icons/fa';
-import '../pages/dashboard.css';
+import './dashboard.css';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();

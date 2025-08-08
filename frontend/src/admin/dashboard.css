@@ -4,6 +4,7 @@
   min-height: 100vh;
   background-color: #f4f6f9;
   box-sizing: border-box;
+  width: 100%;
 }
 
 /* Sidebar styles */
@@ -15,7 +16,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  z-index: 99;
+  z-index: 100;
   display: flex;
   flex-direction: column;
 }
@@ -40,7 +41,6 @@
   color: white;
   border: none;
   cursor: pointer;
-  align-self: flex-end;
 }
 
 .sidebar ul {
@@ -86,12 +86,12 @@
 
 /* Content area */
 .content {
-  margin-left: 70px;
   flex-grow: 1;
-  padding: 20px;
+  padding: 1rem;
   transition: margin-left 0.3s ease;
   position: relative;
   box-sizing: border-box;
+  width: 100%;
 }
 
 .content.shifted {
@@ -105,13 +105,11 @@
   color: #2d3748;
   font-size: 24px;
   cursor: pointer;
-  position: absolute;
-  right: 20px;
-  top: 0px;
-  left: 0;
-  z-index: 100;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 101;
   padding: 0.5rem;
-  width: 41px;
 }
 
 .hamburger-btn:hover {
@@ -127,16 +125,18 @@
   }
 
   .sidebar.minimized {
-    transform: translateX(-100%);
     width: 70px;
+    transform: translateX(-100%);
   }
 
   .sidebar.open {
     transform: translateX(0);
+    width: 250px;
   }
 
   .content {
     margin-left: 0;
+    padding: 0.5rem;
   }
 
   .content.shifted {
@@ -148,46 +148,71 @@
   }
 
   .main-content {
-    padding: 1rem;
+    padding: 0.5rem;
     width: 100%;
     max-width: 100%;
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    gap: 1rem;
-  }
-
-  .add-button-container {
-    position: static;
-    width: auto;
-    margin-top: 0.5rem;
-  }
-
-  .add-button-container button {
-    width: auto;
-    padding: 0.5rem 1rem;
   }
 
   .section {
     width: 100%;
     max-width: 100%;
-    padding: 1rem;
-    overflow-x: hidden;
+    padding: 0.5rem;
   }
 
   .table-scroll {
     overflow-x: auto;
     width: 100%;
   }
+
+  .section table {
+    min-width: 600px; /* Ensure table is scrollable on small screens */
+  }
+
+  .section table th,
+  .section table td {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .section input {
+    font-size: 0.75rem;
+    padding: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: 200px;
+  }
+
+  .sidebar.minimized {
+    width: 60px;
+  }
+
+  .sidebar.open {
+    width: 200px;
+  }
+
+  .content.shifted {
+    margin-left: 200px;
+  }
+
+  .section table th,
+  .section table td {
+    padding: 0.3rem;
+    font-size: 0.7rem;
+  }
+
+  .section input {
+    font-size: 0.7rem;
+    padding: 0.2rem;
+  }
 }
 
 .main-content {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 25px;
+  padding: 1rem;
   background: white;
   border-radius: 0.5rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -195,24 +220,24 @@
 }
 
 .main-content h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   color: #2d3748;
 }
 
 .section {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
   border-radius: 0.5rem;
   width: 100%;
   box-sizing: border-box;
 }
 
 .section h3 {
-  font-size: 1.75rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   color: #2d3748;
   cursor: pointer;
   display: flex;
@@ -226,10 +251,6 @@
   background-color: rgba(0, 0, 0, 0.05);
 }
 
-.section .chevron-icon {
-  margin-left: 0.5rem;
-}
-
 .section-content {
   transition: max-height 0.3s ease, opacity 0.3s ease;
   overflow: hidden;
@@ -241,7 +262,7 @@
 }
 
 .section-content.expanded {
-  max-height: 1000px; /* Adjust based on content height */
+  max-height: 2000px;
   opacity: 1;
 }
 
@@ -276,56 +297,13 @@
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
   width: 100%;
-  max-width: 1200px;
 }
 
 .form-row {
   margin-bottom: 1rem;
-}
-
-.section.account-section {
-  background-color: #f0f0f0;
-}
-
-.section.identity-section {
-  background-color: #e6f0fa;
-}
-
-.section.financial-section {
-  background-color: #e6ffea;
-}
-
-.section.property-section {
-  background-color: #fef6e4;
-}
-
-.section.medical-section {
-  background-color: #f0e6fa;
-}
-
-.section.education-section {
-  background-color: #e6fafa;
-}
-
-.section.digital-section {
-  background-color: #f0f4e6;
-}
-
-.section.legacy-section {
-  background-color: #fae6e6;
-}
-
-.section.family-section {
-  background-color: #e6f0e6;
-}
-
-.section .table-container {
-  position: relative;
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .section table {
@@ -337,13 +315,9 @@
 .section table th,
 .section table td {
   border: 1px solid #e2e8f0;
-  padding: 0.5rem;
+  padding: 0.75rem;
   text-align: left;
   font-size: 0.875rem;
-}
-
-.section table .table-row {
-  margin-bottom: 0.5rem;
 }
 
 .section table th {
@@ -352,28 +326,23 @@
   color: #2d3748;
 }
 
-.section table .name-column {
-  position: relative;
-}
-
-.section table input,
-.section table select {
-  border: none;
+.section table input {
+  border: 1px solid #e2e8f0;
   outline: none;
   background: transparent;
   width: 100%;
+  padding: 0.25rem;
 }
 
 .add-button-container {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100px;
+  position: relative;
+  width: 100%;
   margin-top: 0.5rem;
 }
 
 .add-button-container button {
-  width: 100px;
+  width: 100%;
+  max-width: 100px;
   padding: 0.25rem 0.5rem;
   background-color: #3182ce;
   color: white;
@@ -390,18 +359,18 @@
 
 .submit-section {
   text-align: center;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
 }
 
 .submit-section button {
-  padding: 0.75rem 2rem;
+  padding: 0.5rem 1.5rem;
   background-color: #10b981;
   color: white;
   border: none;
   border-radius: 0.375rem;
   cursor: pointer;
   transition: background-color 0.2s;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -409,3 +378,14 @@
   background-color: #059669;
 }
 
+.error {
+  color: #b91c1c;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.success {
+  color: #15803d;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
