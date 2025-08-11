@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const router = express.Router();
 const Admin = require('../models/Admin');
-const User = require('../models/User'); // Import User model for /users endpoint
+const User = require('../models/User');
 
 // Configure nodemailer for sending reset password emails
 const transporter = nodemailer.createTransport({
@@ -43,7 +43,7 @@ const authenticateAdmin = (req, res, next) => {
     if (err) {
       return res.status(403).json({ message: 'Invalid or expired token' });
     }
-    // Check if the user is an admin (assuming Admin model is used for admin users)
+    // Check if the user is an admin
     Admin.findById(user.userId)
       .then((admin) => {
         if (!admin) {
@@ -153,11 +153,40 @@ router.post('/create-account', async (req, res) => {
 // GET /users - Fetch all users
 router.get('/users', authenticateAdmin, async (req, res) => {
   try {
-    const users = await User.find().select('-password'); // Exclude password field
-    res.status(200).json(users);
+    const users = await User.find().select('email password resetPasswordToken resetPasswordExpires createdAt');
+    res.status(200).json(users.map(user => ({
+      id: user._id,
+      email: user.email,
+      password: user.password,
+      resetPassword: user.resetPasswordToken, // Map to frontend field name
+      resetPasswordExpires: user.resetPasswordExpires,
+      createdAt: user.createdAt,
+    })));
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ message: 'Server error while fetching users' });
+  }
+});
+
+// GET /user/:id - Fetch a single user
+router.get('/user/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId).select('email password resetPasswordToken resetPasswordExpires createdAt');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({
+      id: user._id,
+      email: user.email,
+      password: user.password,
+      resetPassword: user.resetPasswordToken, // Map to frontend field name
+      resetPasswordExpires: user.resetPasswordExpires,
+      createdAt: user.createdAt,
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Server error while fetching user' });
   }
 });
 
@@ -173,6 +202,47 @@ router.delete('/user/:id', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ message: 'Server error while deleting user' });
+  }
+});
+
+// PUT /user/:id - Update a user
+router.put('/user/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { email, password, resetPassword, resetPasswordExpires } = req.body;
+
+    // Validate input
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update fields
+    user.email = email;
+    if (password) {
+      user.password = password; // Will be hashed by pre-save hook
+    }
+    if (resetPassword !== undefined) {
+      user.resetPasswordToken = resetPassword || null;
+    }
+    if (resetPasswordExpires !== undefined) {
+      user.resetPasswordExpires = resetPasswordExpires ? new Date(resetPasswordExpires) : null;
+    }
+
+    await user.save();
+
+    res.status(200).json({ message: 'User updated successfully' });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    if (error.code === 11000) {
+      res.status(400).json({ message: 'Email already exists' });
+    } else {
+      res.status(500).json({ message: 'Server error while updating user' });
+    }
   }
 });
 

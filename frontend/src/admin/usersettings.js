@@ -28,6 +28,7 @@ const UserSettings = () => {
   const [showPasswords, setShowPasswords] = useState({});
   const [editingRow, setEditingRow] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [activeRow, setActiveRow] = useState(null); // New state to track active row
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -78,6 +79,7 @@ const UserSettings = () => {
 
   const handleDeleteUser = async (userId) => {
     try {
+      setActiveRow(userId); // Highlight the row being deleted
       const token = localStorage.getItem('token');
       if (!token) {
         setError('No authentication token found. Please log in.');
@@ -96,6 +98,7 @@ const UserSettings = () => {
           color: '#15803d',
         },
       });
+      setActiveRow(null); // Clear active row after deletion
       fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -110,12 +113,14 @@ const UserSettings = () => {
           color: '#b91c1c',
         },
       });
+      setActiveRow(null); // Clear active row on error
     }
   };
 
   const handleEditUser = (user) => {
     setEditingRow(user.id);
     setEditForm({ ...user });
+    setActiveRow(user.id); // Highlight the row being edited
   };
 
   const handleSaveEdit = async (userId) => {
@@ -143,6 +148,7 @@ const UserSettings = () => {
         },
       });
       setEditingRow(null);
+      setActiveRow(null); // Clear active row after saving
       fetchUsers();
     } catch (error) {
       console.error('Error updating user:', error);
@@ -153,12 +159,14 @@ const UserSettings = () => {
           color: '#b91c1c',
         },
       });
+      setActiveRow(null); // Clear active row on error
     }
   };
 
   const handleCancelEdit = () => {
     setEditingRow(null);
     setEditForm({});
+    setActiveRow(null); // Clear active row on cancel
   };
 
   const handleInputChange = (e, field) => {
@@ -189,6 +197,7 @@ const UserSettings = () => {
       ...prev,
       [userId]: !prev[userId],
     }));
+    setActiveRow(userId); // Highlight the row when toggling password visibility
   };
 
   const getTableHeaders = () => {
@@ -256,7 +265,7 @@ const UserSettings = () => {
           {success && <p className="success">{success}</p>}
           <div className="section">
             <h3>User Management</h3>
-            <div className="section-content expanded table-scroll">
+            <div className="section-content table-scroll">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-200">
@@ -269,7 +278,7 @@ const UserSettings = () => {
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-100">
+                    <tr key={user.id} className={`hover:bg-gray-100 ${activeRow === user.id ? 'active-row' : ''}`}>
                       {editingRow === user.id ? (
                         <>
                           <td className="border p-2">
@@ -280,20 +289,13 @@ const UserSettings = () => {
                               className="w-full p-1 border rounded"
                             />
                           </td>
-                          <td className="border p-2 flex items-center">
+                          <td className="border p-2">
                             <input
                               type={showPasswords[user.id] ? 'text' : 'password'}
                               value={editForm.password || ''}
                               onChange={(e) => handleInputChange(e, 'password')}
                               className="w-full p-1 border rounded"
                             />
-                            <button
-                              onClick={() => togglePasswordVisibility(user.id)}
-                              className="ml-2 text-gray-500 hover:text-gray-700"
-                              title={showPasswords[user.id] ? 'Hide Password' : 'Show Password'}
-                            >
-                              {showPasswords[user.id] ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
-                            </button>
                           </td>
                           <td className="border p-2">
                             <input
@@ -333,15 +335,22 @@ const UserSettings = () => {
                             ))}
                           <td className="border p-2 flex justify-center space-x-2">
                             <button
+                              onClick={() => togglePasswordVisibility(user.id)}
+                              className="action-btn view-btn"
+                              title={showPasswords[user.id] ? 'Hide Password' : 'Show Password'}
+                            >
+                              {showPasswords[user.id] ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                            </button>
+                            <button
                               onClick={() => handleSaveEdit(user.id)}
-                              className="text-green-500 hover:text-green-700 bg-transparent"
+                              className="action-btn save-btn"
                               title="Save"
                             >
                               <FaSave size={20} />
                             </button>
                             <button
                               onClick={handleCancelEdit}
-                              className="text-gray-500 hover:text-gray-700 bg-transparent"
+                              className="action-btn cancel-btn"
                               title="Cancel"
                             >
                               <FaTimes size={20} />
@@ -351,16 +360,7 @@ const UserSettings = () => {
                       ) : (
                         <>
                           <td className="border p-2">{user.email || 'N/A'}</td>
-                          <td className="border p-2 flex items-center">
-                            {formatFieldValue(user.password, 'password', user.id)}
-                            <button
-                              onClick={() => togglePasswordVisibility(user.id)}
-                              className="ml-2 text-gray-500 hover:text-gray-700"
-                              title={showPasswords[user.id] ? 'Hide Password' : 'Show Password'}
-                            >
-                              {showPasswords[user.id] ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
-                            </button>
-                          </td>
+                          <td className="border p-2">{formatFieldValue(user.password, 'password', user.id)}</td>
                           <td className="border p-2">{formatFieldValue(null, 'currentPassword', user.id)}</td>
                           <td className="border p-2">{formatFieldValue(user.resetPassword, 'resetPassword', user.id)}</td>
                           <td className="border p-2">{formatFieldValue(user.resetPasswordExpires, 'resetPasswordExpires', user.id)}</td>
@@ -373,15 +373,22 @@ const UserSettings = () => {
                             ))}
                           <td className="border p-2 flex justify-center space-x-2">
                             <button
+                              onClick={() => togglePasswordVisibility(user.id)}
+                              className="action-btn view-btn"
+                              title={showPasswords[user.id] ? 'Hide Password' : 'Show Password'}
+                            >
+                              {showPasswords[user.id] ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                            </button>
+                            <button
                               onClick={() => handleEditUser(user)}
-                              className="text-blue-500 hover:text-blue-700 bg-transparent"
+                              className="action-btn edit-btn"
                               title="Edit User"
                             >
                               <FaEdit size={20} />
                             </button>
                             <button
                               onClick={() => handleDeleteUser(user.id)}
-                              className="text-red-500 hover:text-red-700 bg-transparent"
+                              className="action-btn delete-btn"
                               title="Delete User"
                             >
                               <FaTrash size={20} />

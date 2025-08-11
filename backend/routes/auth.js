@@ -39,6 +39,7 @@ router.post('/create-account', async (req, res) => {
       userId: user._id,
     });
   } catch (error) {
+    console.error('Create account error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -72,6 +73,7 @@ router.post('/login', async (req, res) => {
       userId: user._id,
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -106,7 +108,7 @@ router.post('/forgot-password', async (req, res) => {
       },
     });
 
-    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
@@ -117,6 +119,7 @@ router.post('/forgot-password', async (req, res) => {
     await transporter.sendMail(mailOptions);
     res.status(200).json({ message: 'Password reset link sent to your email' });
   } catch (error) {
+    console.error('Forgot password error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -130,6 +133,7 @@ router.get('/user/current', authenticateToken, async (req, res) => {
     }
     res.status(200).json({ email: user.email, userId: user._id });
   } catch (error) {
+    console.error('Get current user error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -158,6 +162,7 @@ router.put('/user/update-password', authenticateToken, async (req, res) => {
 
     res.status(200).json({ message: 'Password updated successfully' });
   } catch (error) {
+    console.error('Update password error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

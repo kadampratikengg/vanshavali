@@ -219,11 +219,57 @@
   box-sizing: border-box;
 }
 
-.main-content h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  color: #2d3748;
+/* Action buttons */
+.action-btn {
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+}
+
+.edit-btn {
+  color: #3b82f6;
+}
+
+.edit-btn:hover {
+  color: #1d4ed8;
+}
+
+.delete-btn {
+  color: #ef4444;
+}
+
+.delete-btn:hover {
+  color: #b91c1c;
+}
+
+.view-btn {
+  color: #6b7280;
+}
+
+.view-btn:hover {
+  color: #374151;
+}
+
+.save-btn {
+  color: #22c55e;
+}
+
+.save-btn:hover {
+  color: #15803d;
+}
+
+.cancel-btn {
+  color: #6b7280;
+}
+
+.cancel-btn:hover {
+  color: #374151;
+}
+
+/* Active row highlight */
+.active-row {
+  background-color: #f0f9ff; /* Light blue highlight for active row */
 }
 
 .section {
@@ -239,44 +285,9 @@
   font-weight: 700;
   margin-bottom: 0.75rem;
   color: #2d3748;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem;
-  transition: background-color 0.2s;
 }
 
-.section h3:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.section-content {
-  transition: max-height 0.3s ease, opacity 0.3s ease;
-  overflow: hidden;
-}
-
-.section-content.collapsed {
-  max-height: 0;
-  opacity: 0;
-}
-
-.section-content.expanded {
-  max-height: 2000px;
-  opacity: 1;
-}
-
-.section label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-  color: #4a5568;
-}
-
-.section input,
-.section select,
-.section textarea {
+.section input {
   width: 100%;
   padding: 0.5rem;
   border: 1px solid #e2e8f0;
@@ -284,26 +295,6 @@
   font-size: 0.875rem;
   color: #2d3748;
   box-sizing: border-box;
-}
-
-.section input[type="file"] {
-  padding: 0.25rem;
-}
-
-.section textarea {
-  min-height: 100px;
-  resize: vertical;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  width: 100%;
-}
-
-.form-row {
-  margin-bottom: 1rem;
 }
 
 .section table {
@@ -334,48 +325,8 @@
   padding: 0.25rem;
 }
 
-.add-button-container {
-  position: relative;
-  width: 100%;
-  margin-top: 0.5rem;
-}
-
-.add-button-container button {
-  width: 100%;
-  max-width: 100px;
-  padding: 0.25rem 0.5rem;
-  background-color: #3182ce;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 0.75rem;
-}
-
-.add-button-container button:hover {
-  background-color: #2b6cb0;
-}
-
-.submit-section {
-  text-align: center;
-  margin-top: 1.5rem;
-}
-
-.submit-section button {
-  padding: 0.5rem 1.5rem;
-  background-color: #10b981;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.submit-section button:hover {
-  background-color: #059669;
+.table-scroll {
+  overflow-x: auto;
 }
 
 .error {
