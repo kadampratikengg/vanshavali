@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
 const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
-
   const [personalData, setPersonalData] = useState({
     LegalName: '',
     AlternateName: '',
@@ -13,27 +11,10 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
   const [identityData, setIdentityData] = useState([
     { id: 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null },
   ]);
-  const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [showAddedDocuments, setShowAddedDocuments] = useState(false);
   const [addedDocuments, setAddedDocuments] = useState([]);
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
-
-  const documentOptions = [
-    'Select Document',
-    'Nationality & Domicile',
-    'Aadhar',
-    'Pan',
-    'Passport',
-    'Voter Id',
-    'Driving License',
-    'Marriage Cert',
-    'Death Cert',
-    'Name Change Docs',
-    'Power Of Attorney',
-    'Caste Certificate',
-    'Other',
-  ];
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -108,9 +89,11 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
         });
         const { personalData, identityData } = response.data;
         setPersonalData(personalData || {
-      
+          LegalName: '',
+          AlternateName: '',
+          DateOfBirth: '',
+          PlaceOfBirth: '',
         });
-        // Flatten Government and Other arrays into a single array
         const combinedDocuments = [
           ...(identityData?.Government || []),
           ...(identityData?.Other || []),
@@ -161,88 +144,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
     return '';
   };
 
-  const handleIdentityChange = (id, field, value) => {
-    setIdentityData((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
-    if (field === 'documentNumber') {
-      const error = validateInput(
-        identityData.find((item) => item.id === id).documentType,
-        value
-      );
-      setValidationErrors((prev) =>
-        prev.map((err) => (err.id === id ? { ...err, error } : err))
-      );
-    }
-    setError('');
-    setSuccess('');
-  };
-
-  const addIdentityRow = async () => {
-    const lastRow = identityData[identityData.length - 1];
-    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.fileUuid) {
-      setError('Please select a document type, enter a document number, and upload a file before adding.');
-      return;
-    }
-
-    const error = validateInput(lastRow.documentType, lastRow.documentNumber);
-    if (error) {
-      setValidationErrors((prev) =>
-        prev.map((err) => (err.id === lastRow.id ? { ...err, error } : err))
-      );
-      setError(error);
-      return;
-    }
-
-    try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/identity/document`, {
-        documentType: lastRow.documentType,
-        documentNumber: lastRow.documentNumber,
-        fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const newDocument = response.data.document;
-
-      setAddedDocuments((prev) => [
-        ...prev,
-        {
-          id: newDocument._id,
-          documentType: newDocument.documentType,
-          documentNumber: newDocument.documentNumber,
-          fileUrl: newDocument.fileUrl,
-        },
-      ]);
-      setShowAddedDocuments(true);
-      setIdentityData([{ id: identityData.length + 1, documentType: 'Select Document', documentNumber: '', file: null, fileUuid: null }]);
-      setValidationErrors([{ id: identityData.length + 1, error: '' }]);
-      setSuccess('Document added successfully');
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to add document');
-      console.error('Add document error:', error);
-    }
-  };
-
-  const deleteIdentityRow = (id) => async () => {
-    try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/identity/document/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
-      if (addedDocuments.length <= 1) {
-        setShowAddedDocuments(false);
-      }
-      setSuccess('Document deleted successfully');
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to delete document');
-      console.error('Delete document error:', error);
-    }
-  };
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setPersonalData((prev) => ({ ...prev, [name]: value }));
@@ -275,11 +176,8 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
 
   return (
     <form className="section identity-section" onSubmit={handleSectionSubmit}>
-      <h3 >
-        Identity & Legal Documents
-       
-      </h3>
-      <div className={`section-content  : 'collapsed'} overflow-y-auto max-h-[500px]`}>
+      <h3>Identity & Legal Documents</h3>
+      <div className="section-content overflow-y-auto max-h-[500px]">
         <div className="form-grid mb-6">
           {Object.keys(personalData).map((key) => (
             <div key={key} className="form-row">
@@ -313,7 +211,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
                     <th className="border p-2">Document Type</th>
                     <th className="border p-2">Document Number</th>
                     <th className="border p-2">View File</th>
-                    
                   </tr>
                 </thead>
                 <tbody>
@@ -330,7 +227,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
                           'No file uploaded'
                         )}
                       </td>
-                      
                     </tr>
                   ))}
                 </tbody>
@@ -338,7 +234,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
             )}
           </div>
         )}
-        
       </div>
     </form>
   );

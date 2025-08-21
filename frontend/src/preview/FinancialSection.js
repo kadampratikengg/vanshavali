@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
 const FinancialSection = ({ setError, setSuccess, userId, token }) => {
-  
   const [financialData, setFinancialData] = useState([{
     id: 1,
     section: 'Banking',
@@ -14,44 +12,8 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
     fileUuid: null,
   }]);
   const [addedDocuments, setAddedDocuments] = useState([]);
-  const [validationErrors, setValidationErrors] = useState([{ id: 1, error: '' }]);
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
-
-  const documentOptions = {
-    Banking: ['Select Document', 'Bank Details', 'Passbook', 'Fixed Deposit Details', 'Other'],
-    Investments: ['Select Document', 'Mutual Fund Details', 'Demat Account Details', 'PF Details', 'Other'],
-  };
-
-  const allDocumentTypes = [
-    ...new Set(Object.values(documentOptions).flat()),
-  ].sort((a, b) => {
-    if (a === 'Select Document') return -1;
-    if (b === 'Select Document') return 1;
-    if (a === 'Other') return 1;
-    if (b === 'Other') return -1;
-    return a.localeCompare(b);
-  });
-
-  const validateInput = (section, documentType, documentNumber) => {
-    if (documentType === 'Select Document') {
-      return 'Please select a valid document type';
-    }
-    if (!documentNumber) {
-      return 'Document number is required';
-    }
-    if (section === 'Banking' && documentNumber) {
-      if (!/^\d{9,18}$/.test(documentNumber)) {
-        return 'Bank Account Number must be 9-18 digits';
-      }
-    }
-    if (section === 'Investments' && documentNumber) {
-      if (!/^[A-Za-z0-9/-]{1,50}$/.test(documentNumber)) {
-        return 'Investment Document Number must be alphanumeric with optional slashes or hyphens (max 50 characters)';
-      }
-    }
-    return '';
-  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -193,13 +155,6 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
             remark: doc.remark,
           }))
         );
-        setValidationErrors(newFinancialData.map(item => ({ id: item.id, error: '' })));
-        console.log('validationErrors:', JSON.stringify(
-          newFinancialData.map(item => ({ id: item.id, error: '' })),
-          null,
-          2
-        ));
-        // setExpanded(true);
       } catch (error) {
         console.error('Fetch error:', {
           message: error.message,
@@ -222,8 +177,6 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
           }];
           setFinancialData(defaultData);
           setAddedDocuments([]);
-          setValidationErrors([{ id: 1, error: '' }]);
-          // setExpanded(true);
         } else {
           setError(error.response?.data?.message || 'Failed to fetch financial data');
         }
@@ -232,141 +185,10 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
     fetchFinancialData();
   }, [setError, token]);
 
-  const handleTableChange = (id, field, value) => {
-    setFinancialData((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
-    );
-    if (field === 'documentNumber' || field === 'documentType' || field === 'section') {
-      const updatedRow = financialData.find((item) => item.id === id);
-      const error = validateInput(
-        field === 'section' ? value : updatedRow.section,
-        field === 'documentType' ? value : updatedRow.documentType,
-        field === 'documentNumber' ? value : updatedRow.documentNumber
-      );
-      setValidationErrors((prev) =>
-        prev.map((err) =>
-          err.id === id ? { ...err, error } : err
-        )
-      );
-    }
-    setError('');
-    setSuccess('');
-  };
-
-  const addTableRow = async () => {
-    const lastRow = financialData[financialData.length - 1];
-    if (lastRow.documentType === 'Select Document' || !lastRow.documentNumber || !lastRow.fileUuid) {
-      setError('Please select a document type, enter a document number, and upload a file before adding.');
-      return;
-    }
-
-    const error = validateInput(lastRow.section, lastRow.documentType, lastRow.documentNumber);
-    if (error) {
-      setValidationErrors((prev) =>
-        prev.map((err) =>
-          err.id === lastRow.id ? { ...err, error } : err
-        )
-      );
-      setError(error);
-      return;
-    }
-
-    try {
-      console.log('Sending POST request to /financial/document with payload:', {
-        type: lastRow.documentType,
-        number: lastRow.documentNumber,
-        remark: lastRow.remark || '',
-        fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
-        section: lastRow.section,
-      });
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/financial/document`,
-        {
-          type: lastRow.documentType,
-          number: lastRow.documentNumber,
-          remark: lastRow.remark || '',
-          fileUrl: `https://ucarecdn.com/${lastRow.fileUuid}/`,
-          section: lastRow.section,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      console.log('POST response:', JSON.stringify(response.data, null, 2));
-
-      const newDocument = response.data.document;
-      if (!newDocument.number) {
-        console.warn(`Missing 'number' in POST response:`, newDocument);
-      }
-      setAddedDocuments((prev) => [
-        ...prev,
-        {
-          id: newDocument._id,
-          section: newDocument.section || lastRow.section,
-          documentType: newDocument.type || 'Select Document',
-          documentNumber: newDocument.number || lastRow.documentNumber,
-          remark: newDocument.remark || lastRow.remark,
-          fileUrl: newDocument.fileUrl || `https://ucarecdn.com/${lastRow.fileUuid}/`,
-        },
-      ]);
-      setFinancialData((prev) => [
-        {
-          id: Math.max(...prev.map(row => Number(row.id)), 0) + 1,
-          section: 'Banking',
-          documentType: 'Select Document',
-          documentNumber: '',
-          remark: '',
-          file: null,
-          fileUuid: null,
-        },
-      ]);
-      setValidationErrors((prev) => [
-        { id: Math.max(...prev.map(err => Number(err.id)), 0) + 1, error: '' },
-      ]);
-      setSuccess('Document added successfully');
-    } catch (error) {
-      console.error('Add document error:', {
-        message: error.message,
-        response: error.response ? {
-          status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers,
-        } : 'No response received',
-      });
-      setError(error.response?.data?.message || 'Failed to save document. Please check the console for details.');
-    }
-  };
-
-  const deleteTableRow = (id) => async () => {
-    try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/financial/document/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAddedDocuments((prev) => prev.filter((item) => item.id !== id));
-      setSuccess('Document deleted successfully');
-    } catch (error) {
-      console.error('Delete document error:', {
-        message: error.message,
-        response: error.response ? {
-          status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers,
-        } : 'No response received',
-      });
-      setError(error.response?.data?.message || 'Failed to delete document');
-    }
-  };
-
   const renderTable = () => (
     <div className="table-container mb-6">
       {addedDocuments.length > 0 && (
         <div className="table-container mt-6">
-          
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
@@ -374,7 +196,6 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                 <th className="border p-2">Document Number</th>
                 <th className="border p-2">Remark</th>
                 <th className="border p-2">View File</th>
-                
               </tr>
             </thead>
             <tbody>
@@ -392,24 +213,19 @@ const FinancialSection = ({ setError, setSuccess, userId, token }) => {
                       'No file uploaded'
                     )}
                   </td>
-                  
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )} 
-      
     </div>
   );
 
   return (
     <div className="section financial-section">
-      <h3  >
-        Financial Records
-         
-      </h3>
-      <div className={`section-content } overflow-y-auto max-h-[500px]`}>
+      <h3>Financial Records</h3>
+      <div className="section-content overflow-y-auto max-h-[500px]">
         {renderTable()}
       </div>
     </div>

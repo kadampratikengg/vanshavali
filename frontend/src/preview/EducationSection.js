@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
 const EducationSection = ({ setError, setSuccess, userId, token }) => {
- 
   const [educationData, setEducationData] = useState({
     Education: [{ id: 'temp-1', level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }],
     Employment: [{ id: 'temp-1', companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }],
@@ -16,42 +14,8 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
     Education: [],
     Employment: [],
   });
-  const [validationErrors, setValidationErrors] = useState({
-    Education: [{ id: 'temp-1', error: '' }],
-    Employment: [{ id: 'temp-1', error: '' }],
-  });
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
-
-  const educationLevelOptions = [
-    'Select Level',
-    'SSC',
-    'HSC',
-    'Degree',
-    'Diploma',
-    'Postgraduate',
-    'Doctorate',
-    'Other',
-  ];
-
-  const validateInput = (section, data) => {
-    if (section === 'Education') {
-      if (data.level === 'Select Level') {
-        return 'Please select a valid education level';
-      }
-      if (!data.fileUuid) {
-        return 'Please upload a file';
-      }
-    } else if (section === 'Employment') {
-      if (!data.companyName) {
-        return 'Company name is required';
-      }
-      if (!data.fileUuid) {
-        return 'Please upload a file';
-      }
-    }
-    return '';
-  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -145,10 +109,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
             education: false,
             employment: false,
           });
-          setValidationErrors({
-            Education: [{ id: 'temp-1', error: '' }],
-            Employment: [{ id: 'temp-1', error: '' }],
-          });
           return;
         }
         setAddedDocuments({
@@ -171,10 +131,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
           education: fetchedData.Education?.length > 0,
           employment: fetchedData.Employment?.length > 0,
         });
-        setValidationErrors({
-          Education: [{ id: 'temp-1', error: '' }],
-          Employment: [{ id: 'temp-1', error: '' }],
-        });
       } catch (error) {
         if (error.response?.status === 404) {
           console.warn('Education endpoint not found, using default data');
@@ -186,10 +142,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
             education: false,
             employment: false,
           });
-          setValidationErrors({
-            Education: [{ id: 'temp-1', error: '' }],
-            Employment: [{ id: 'temp-1', error: '' }],
-          });
         } else {
           setError(error.response?.data?.message || 'Failed to fetch education data');
           console.error('Fetch education data error:', error);
@@ -199,132 +151,10 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
     fetchEducationData();
   }, [setError, token]);
 
-  const handleTableChange = (section, id, field, value) => {
-    setEducationData((prev) => ({
-      ...prev,
-      [section]: prev[section].map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      ),
-    }));
-    setValidationErrors((prev) => ({
-      ...prev,
-      [section]: prev[section].map((err) =>
-        err.id === id ? { ...err, error: '' } : err
-      ),
-    }));
-    setError('');
-    setSuccess('');
-  };
-
-  const addTableRow = (section) => async (e) => {
-    e.preventDefault();
-    const lastRow = educationData[section][educationData[section].length - 1];
-    const error = validateInput(section, lastRow);
-    if (error) {
-      setValidationErrors((prev) => ({
-        ...prev,
-        [section]: prev[section].map((err) =>
-          err.id === lastRow.id ? { ...err, error } : err
-        ),
-      }));
-      setError(error);
-      return;
-    }
-
-    try {
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/education/document`,
-        {
-          ...(section === 'Education' ? {
-            level: lastRow.level,
-            number: lastRow.number,
-            dateOfPassing: lastRow.dateOfPassing,
-          } : {
-            companyName: lastRow.companyName,
-            joinDate: lastRow.joinDate,
-            exitDate: lastRow.exitDate,
-          }),
-          fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const newDocument = response.data.document;
-      setAddedDocuments((prev) => ({
-        ...prev,
-        [section]: [
-          ...prev[section],
-          {
-            id: newDocument._id,
-            ...(section === 'Education' ? {
-              level: lastRow.level,
-              number: lastRow.number,
-              dateOfPassing: lastRow.dateOfPassing,
-            } : {
-              companyName: lastRow.companyName,
-              joinDate: lastRow.joinDate,
-              exitDate: lastRow.exitDate,
-            }),
-            fileUrl: newDocument.fileUrl,
-          },
-        ],
-      }));
-      setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: true }));
-      setEducationData((prev) => ({
-        ...prev,
-        [section]: [
-          {
-            id: `temp-${prev[section].length + 1}`,
-            ...(section === 'Education'
-              ? { level: 'Select Level', number: '', dateOfPassing: '', file: null, fileUuid: null }
-              : { companyName: '', joinDate: '', exitDate: '', file: null, fileUuid: null }),
-          },
-        ],
-      }));
-      setValidationErrors((prev) => ({
-        ...prev,
-        [section]: [
-          { id: `temp-${prev[section].length + 1}`, error: '' },
-        ],
-      }));
-      setSuccess(`${section} document added successfully`);
-    } catch (error) {
-      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()} document`);
-      console.error(`Add ${section} document error:`, error);
-    }
-  };
-
-  const deleteTableRow = (section, id) => async () => {
-    try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/education/document/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAddedDocuments((prev) => ({
-        ...prev,
-        [section]: prev[section].filter((item) => item.id !== id),
-      }));
-      if (addedDocuments[section].length <= 1) {
-        setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: false }));
-      }
-      setSuccess(`${section} document deleted successfully`);
-    } catch (error) {
-      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()} document`);
-      console.error(`Delete ${section} document error:`, error);
-    }
-  };
-
   return (
     <div className="section education-section">
-      <h3 >
-        Education & Employment
-        
-      </h3>
-      <div className={`section-content  } overflow-y-auto max-h-[500px]`}>
+      <h3>Education & Employment</h3>
+      <div className="section-content overflow-y-auto max-h-[500px]">
         {/* Education Table */}
         {showAddedDocuments.education && (
           <div className="table-container mt-6">
@@ -339,7 +169,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                     <th className="border p-2">Number</th>
                     <th className="border p-2">Date of Passing</th>
                     <th className="border p-2">View File</th>
-                    
                   </tr>
                 </thead>
                 <tbody>
@@ -357,7 +186,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                           'No file uploaded'
                         )}
                       </td>
-                      
                     </tr>
                   ))}
                 </tbody>
@@ -365,9 +193,8 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
             )}
           </div>
         )}
-        
-
-{showAddedDocuments.employment && (
+        {/* Employment Table */}
+        {showAddedDocuments.employment && (
           <div className="table-container mt-6">
             <h4>Employment Details</h4>
             {addedDocuments.Employment.length === 0 ? (
@@ -380,7 +207,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                     <th className="border p-2">Join Date</th>
                     <th className="border p-2">Exit Date</th>
                     <th className="border p-2">View File</th>
-                    
                   </tr>
                 </thead>
                 <tbody>
@@ -398,7 +224,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
                           'No file uploaded'
                         )}
                       </td>
-                      
                     </tr>
                   ))}
                 </tbody>
@@ -406,7 +231,6 @@ const EducationSection = ({ setError, setSuccess, userId, token }) => {
             )}
           </div>
         )}
-        
       </div>
     </div>
   );

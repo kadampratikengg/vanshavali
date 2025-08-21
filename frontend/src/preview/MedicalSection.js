@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaChevronUp, FaChevronDown, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 
 const MedicalSection = ({ setError, setSuccess, userId, token }) => {
-   
   const [medicalData, setMedicalData] = useState({
     MedicalHistory: [{ id: 'temp-1', condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }],
     MedicalInsurance: [{ id: 'temp-1', provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }],
@@ -16,46 +14,8 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
     MedicalHistory: [],
     MedicalInsurance: [],
   });
-  const [validationErrors, setValidationErrors] = useState({
-    MedicalHistory: [{ id: 'temp-1', error: '' }],
-    MedicalInsurance: [{ id: 'temp-1', error: '' }],
-  });
   const [uploadcareLoaded, setUploadcareLoaded] = useState(false);
   const widgetRefs = useRef({});
-
-  const bloodGroupOptions = [
-    'Select Blood Group',
-    'A+',
-    'A-',
-    'B+',
-    'B-',
-    'AB+',
-    'AB-',
-    'O+',
-    'O-',
-  ];
-
-  const validateInput = (section, data) => {
-    if (section === 'MedicalHistory') {
-      if (!data.condition) {
-        return 'Medical condition is required';
-      }
-      if (data.bloodGroup === 'Select Blood Group') {
-        return 'Please select a valid blood group';
-      }
-      if (!data.fileUuid) {
-        return 'Please upload a file';
-      }
-    } else if (section === 'MedicalInsurance') {
-      if (!data.provider) {
-        return 'Insurance provider is required';
-      }
-      if (!data.fileUuid) {
-        return 'Please upload a file';
-      }
-    }
-    return '';
-  };
 
   useEffect(() => {
     console.log('Uploadcare Public Key:', process.env.REACT_APP_UPLOADCARE_PUBLIC_KEY);
@@ -149,10 +109,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
             medicalHistory: false,
             medicalInsurance: false,
           });
-          setValidationErrors({
-            MedicalHistory: [{ id: 'temp-1', error: '' }],
-            MedicalInsurance: [{ id: 'temp-1', error: '' }],
-          });
           return;
         }
         setAddedDocuments({
@@ -176,10 +132,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
           medicalHistory: fetchedData.MedicalHistory?.length > 0,
           medicalInsurance: fetchedData.MedicalInsurance?.length > 0,
         });
-        setValidationErrors({
-          MedicalHistory: [{ id: 'temp-1', error: '' }],
-          MedicalInsurance: [{ id: 'temp-1', error: '' }],
-        });
       } catch (error) {
         if (error.response?.status === 404) {
           console.warn('Medical endpoint not found, using default data');
@@ -191,10 +143,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
             medicalHistory: false,
             medicalInsurance: false,
           });
-          setValidationErrors({
-            MedicalHistory: [{ id: 'temp-1', error: '' }],
-            MedicalInsurance: [{ id: 'temp-1', error: '' }],
-          });
         } else {
           setError(error.response?.data?.message || 'Failed to fetch medical data');
           console.error('Fetch medical data error:', error);
@@ -204,134 +152,10 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
     fetchMedicalData();
   }, [setError, token]);
 
-  const handleTableChange = (section, id, field, value) => {
-    setMedicalData((prev) => ({
-      ...prev,
-      [section]: prev[section].map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      ),
-    }));
-    setValidationErrors((prev) => ({
-      ...prev,
-      [section]: prev[section].map((err) =>
-        err.id === id ? { ...err, error: '' } : err
-      ),
-    }));
-    setError('');
-    setSuccess('');
-  };
-
-  const addTableRow = (section) => async (e) => {
-    e.preventDefault();
-    const lastRow = medicalData[section][medicalData[section].length - 1];
-    const error = validateInput(section, lastRow);
-    if (error) {
-      setValidationErrors((prev) => ({
-        ...prev,
-        [section]: prev[section].map((err) =>
-          err.id === lastRow.id ? { ...err, error } : err
-        ),
-      }));
-      setError(error);
-      return;
-    }
-
-    try {
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/medical/document`,
-        {
-          ...(section === 'MedicalHistory' ? {
-            condition: lastRow.condition,
-            bloodGroup: lastRow.bloodGroup,
-            height: lastRow.height,
-            weight: lastRow.weight,
-          } : {
-            provider: lastRow.provider,
-            policyNumber: lastRow.policyNumber,
-            expiryDate: lastRow.expiryDate,
-          }),
-          fileUrl: lastRow.fileUuid ? `https://ucarecdn.com/${lastRow.fileUuid}/` : '',
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const newDocument = response.data.document;
-      setAddedDocuments((prev) => ({
-        ...prev,
-        [section]: [
-          ...prev[section],
-          {
-            id: newDocument._id,
-            ...(section === 'MedicalHistory' ? {
-              condition: lastRow.condition,
-              bloodGroup: lastRow.bloodGroup,
-              height: lastRow.height,
-              weight: lastRow.weight,
-            } : {
-              provider: lastRow.provider,
-              policyNumber: lastRow.policyNumber,
-              expiryDate: lastRow.expiryDate,
-            }),
-            fileUrl: newDocument.fileUrl,
-          },
-        ],
-      }));
-      setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: true }));
-      setMedicalData((prev) => ({
-        ...prev,
-        [section]: [
-          {
-            id: `temp-${prev[section].length + 1}`,
-            ...(section === 'MedicalHistory'
-              ? { condition: '', bloodGroup: 'Select Blood Group', height: '', weight: '', file: null, fileUuid: null }
-              : { provider: '', policyNumber: '', expiryDate: '', file: null, fileUuid: null }),
-          },
-        ],
-      }));
-      setValidationErrors((prev) => ({
-        ...prev,
-        [section]: [
-          { id: `temp-${prev[section].length + 1}`, error: '' },
-        ],
-      }));
-      setSuccess(`${section} document added successfully`);
-    } catch (error) {
-      setError(error.response?.data?.message || `Failed to save ${section.toLowerCase()} document`);
-      console.error(`Add ${section} document error:`, error);
-    }
-  };
-
-  const deleteTableRow = (section, id) => async () => {
-    try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/medical/document/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAddedDocuments((prev) => ({
-        ...prev,
-        [section]: prev[section].filter((item) => item.id !== id),
-      }));
-      if (addedDocuments[section].length <= 1) {
-        setShowAddedDocuments((prev) => ({ ...prev, [section.toLowerCase()]: false }));
-      }
-      setSuccess(`${section} document deleted successfully`);
-    } catch (error) {
-      setError(error.response?.data?.message || `Failed to delete ${section.toLowerCase()} document`);
-      console.error(`Delete ${section} document error:`, error);
-    }
-  };
-
   return (
     <div className="section medical-section">
-      <h3  >
-        Medical History & Insurance
-        
-      </h3>
-      <div className={`section-content } overflow-y-auto max-h-[500px]`}>
+      <h3>Medical History & Insurance</h3>
+      <div className="section-content overflow-y-auto max-h-[500px]">
         {/* Medical History Table */}
         {showAddedDocuments.medicalHistory && (
           <div className="table-container mt-6">
@@ -347,7 +171,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
                     <th className="border p-2">Height (cm)</th>
                     <th className="border p-2">Weight (kg)</th>
                     <th className="border p-2">View File</th>
-                  
                   </tr>
                 </thead>
                 <tbody>
@@ -366,7 +189,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
                           'No file uploaded'
                         )}
                       </td>
-                      
                     </tr>
                   ))}
                 </tbody>
@@ -389,7 +211,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
                     <th className="border p-2">Policy Number</th>
                     <th className="border p-2">Expiry Date</th>
                     <th className="border p-2">View File</th>
-                    
                   </tr>
                 </thead>
                 <tbody>
@@ -407,7 +228,6 @@ const MedicalSection = ({ setError, setSuccess, userId, token }) => {
                           'No file uploaded'
                         )}
                       </td>
-                      
                     </tr>
                   ))}
                 </tbody>

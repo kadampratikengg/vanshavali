@@ -55,7 +55,7 @@ const DigitalSection = ({ setError, setSuccess, userId, token }) => {
       <div className="section-content overflow-y-auto max-h-[500px]">
         {showAddedDocuments && (
           <div className="table-container mt-6">
-            <h4>Digital Details</h4>
+           
             {addedDocuments.length === 0 ? (
               <p className="text-gray-500">No digital access details added yet.</p>
             ) : (
