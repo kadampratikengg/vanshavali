@@ -19,7 +19,7 @@ const identityRoutes = require('./routes/identity');
 const propertyRoutes = require('./routes/property');
 const financialRoutes = require('./routes/financial');
 const familyRoutes = require('./routes/family');
-const medicalRoutes = require('./routes/medical.js');
+const medicalRoutes = require('./routes/medical');
 const educationRoutes = require('./routes/education');
 const digitalRoutes = require('./routes/digital');
 const legacyRoutes = require('./routes/legacy');
@@ -129,7 +129,7 @@ async function startServer() {
     app.use('/Uploads', express.static(uploadPath));
 
     // Handle 404 errors
-    app.use((req, res, next) => {
+    app.use((req, ranges, next) => {
       console.error(`404 Error: Route ${req.originalUrl} not found`);
       res.status(404).json({ message: `Route ${req.originalUrl} not found` });
     });

@@ -125,25 +125,6 @@ const IdentitySection = ({ setError, setSuccess, handleSubmit, token }) => {
     fetchIdentityData();
   }, [setError, token]);
 
-  const validateInput = (documentType, value) => {
-    if (documentType === 'Aadhar' && value && !/^\d{12}$/.test(value)) {
-      return 'Aadhar must be a 12-digit number';
-    }
-    if (documentType === 'Pan' && value && !/^[A-Z]{5}\d{4}[A-Z]{1}$/.test(value)) {
-      return 'PAN must be in format ABCDE1234F';
-    }
-    if (documentType === 'Passport' && value && !/^[A-Z]{1}\d{7}$/.test(value)) {
-      return 'Passport must be in format A1234567';
-    }
-    if (documentType === 'Voter Id' && value && !/^[A-Z]{3}\d{7}$/.test(value)) {
-      return 'Voter ID must be in format ABC1234567';
-    }
-    if (documentType === 'Driving License' && value && !/^[A-Z]{2}\d{13}$/.test(value)) {
-      return 'Driving License must be in format AB1234567890123';
-    }
-    return '';
-  };
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setPersonalData((prev) => ({ ...prev, [name]: value }));

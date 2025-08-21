@@ -7,6 +7,7 @@ const fs = require('fs');
 const multer = require('multer');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
+
 let adminAuthRoutes;
 try {
   adminAuthRoutes = require('./routes/adminAuth');
@@ -15,6 +16,7 @@ try {
   console.error('Error loading adminAuthRoutes:', error);
   process.exit(1);
 }
+
 const identityRoutes = require('./routes/identity');
 const propertyRoutes = require('./routes/property');
 const financialRoutes = require('./routes/financial');
@@ -23,6 +25,7 @@ const medicalRoutes = require('./routes/medical');
 const educationRoutes = require('./routes/education');
 const digitalRoutes = require('./routes/digital');
 const legacyRoutes = require('./routes/legacy');
+const paymentRoutes = require('./middleware/payment'); // ✅ Razorpay route file
 const { errorHandler, multerErrorHandler } = require('./middleware/error');
 
 const app = express();
@@ -45,7 +48,12 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 const corsOptions = {
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-razorpay-key-id',
+    'x-razorpay-key-secret'
+  ],
   credentials: true,
 };
 
@@ -72,6 +80,10 @@ if (!process.env.JWT_SECRET) {
 }
 if (!process.env.UPLOADCARE_PUBLIC_KEY) {
   console.error('Error: UPLOADCARE_PUBLIC_KEY is not defined in .env file');
+  process.exit(1);
+}
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+  console.error('Error: Razorpay keys are missing in .env file');
   process.exit(1);
 }
 
@@ -106,6 +118,7 @@ async function startServer() {
     app.use('/education', upload.any(), educationRoutes);
     app.use('/api/digital', digitalRoutes);
     app.use('/api/legacy', legacyRoutes);
+    app.use('/api/payment', paymentRoutes); // ✅ Razorpay route
 
     // Verify route registration
     console.log('Registered routes:');
@@ -129,7 +142,7 @@ async function startServer() {
     app.use('/Uploads', express.static(uploadPath));
 
     // Handle 404 errors
-    app.use((req, ranges, next) => {
+    app.use((req, res, next) => {
       console.error(`404 Error: Route ${req.originalUrl} not found`);
       res.status(404).json({ message: `Route ${req.originalUrl} not found` });
     });
