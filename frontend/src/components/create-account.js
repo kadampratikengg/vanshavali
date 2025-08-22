@@ -41,10 +41,32 @@ const CreateAccountPage = () => {
     setLoading(true);
 
     try {
+      // Validate required fields for create-order
+      const amount = Number(process.env.REACT_APP_PAYMENT_AMOUNT);
+      if (!amount || isNaN(amount)) {
+        setErrorMessage('Payment amount is not configured.');
+        toast.error('Payment amount is not configured.');
+        setLoading(false);
+        return;
+      }
+      if (!email) {
+        setErrorMessage('Email is required for payment.');
+        toast.error('Email is required for payment.');
+        setLoading(false);
+        return;
+      }
+      const currency = 'INR';
+      if (!currency) {
+        setErrorMessage('Currency is not configured.');
+        toast.error('Currency is not configured.');
+        setLoading(false);
+        return;
+      }
+
       // Create Razorpay order
       const orderResponse = await axios.post(
         `${process.env.REACT_APP_API_URL}/create-order`,
-        { amount: 50000, currency: 'INR', email },
+        { amount, currency, email },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -53,7 +75,7 @@ const CreateAccountPage = () => {
       );
 
       await displayRazorpay({
-        amount: 50000, // Amount in paise (500 INR)
+        amount,
         email,
         order_id: orderResponse.data.order_id,
         description: 'Account Creation Payment',

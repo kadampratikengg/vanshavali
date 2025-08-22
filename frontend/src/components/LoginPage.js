@@ -23,13 +23,32 @@ const LoginPage = ({ onLogin }) => {
 
       const data = await response.json();
       if (!response.ok || data.isExpired) {
+        // Validate required fields for create-order
+        const amount = Number(process.env.REACT_APP_PAYMENT_AMOUNT);
+        if (!amount || isNaN(amount)) {
+          setErrorMessage('Payment amount is not configured.');
+          toast.error('Payment amount is not configured.');
+          return;
+        }
+        if (!email) {
+          setErrorMessage('Email is required for payment.');
+          toast.error('Email is required for payment.');
+          return;
+        }
+        const currency = 'INR';
+        if (!currency) {
+          setErrorMessage('Currency is not configured.');
+          toast.error('Currency is not configured.');
+          return;
+        }
+
         // Validity expired, initiate payment
         const orderResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-order`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ amount: 50000, currency: 'INR', email }),
+          body: JSON.stringify({ amount, currency, email }),
         });
 
         const orderData = await orderResponse.json();
@@ -38,7 +57,7 @@ const LoginPage = ({ onLogin }) => {
         }
 
         await displayRazorpay({
-          amount: 50000,
+          amount,
           email,
           order_id: orderData.order_id,
           description: 'Account Renewal Payment',
@@ -63,7 +82,7 @@ const LoginPage = ({ onLogin }) => {
 
               const renewData = await renewResponse.json();
               if (renewResponse.ok) {
-                localStorage.setItem('validity',  renewData.validity);
+                localStorage.setItem('validity', renewData.validity);
                 toast.success('Account renewed successfully!');
                 onLogin();
               } else {
